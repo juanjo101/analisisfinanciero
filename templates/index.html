@@ -10,9 +10,15 @@
   <body>
     <header class="top">
       <h1>Dashboard Financiero Web</h1>
-      <div class="row">
+      <div class="row wrap">
         <input id="excelPath" type="text" />
+        <input id="excelFile" type="file" accept=".xlsx,.xls" class="short-file" />
+        <button id="uploadBtn">Subir Excel</button>
+        <button id="discoverBtn">Detectar hojas</button>
+        <select id="balanceSheet"></select>
+        <select id="erSheet"></select>
         <button id="loadBtn">Cargar</button>
+        <button id="reportBtn">Generar reporte</button>
       </div>
       <p id="status"></p>
     </header>
@@ -53,6 +59,16 @@
           <button id="heatBtn">Generar</button>
         </div>
         <div id="heatTable"></div>
+      </section>
+
+      <section class="card">
+        <h2>Análisis Horizontal - Balance</h2>
+        <div id="horizontalBalanceTable" class="table-wrap"></div>
+      </section>
+
+      <section class="card">
+        <h2>Análisis Horizontal - E.R.</h2>
+        <div id="horizontalErTable" class="table-wrap"></div>
       </section>
 
       <section class="card">

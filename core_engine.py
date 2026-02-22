@@ -1,3 +1,4 @@
+import os
 import re
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
@@ -154,13 +155,71 @@ class FinancialState:
 class FinancialEngine:
     FACTOR_CANDIDATES = ["Inflación_%", "PIB_real_%", "USD/DOP", "TPM_%"]
 
-    def __init__(self, excel_path: str):
+    def __init__(self, excel_path: str, balance_sheet: str = None, er_sheet: str = None):
         self.excel_path = excel_path
+        self.balance_sheet = balance_sheet
+        self.er_sheet = er_sheet
         self.state = self.load()
 
+    @staticmethod
+    def list_sheets(excel_path: str) -> List[str]:
+        return pd.ExcelFile(excel_path).sheet_names
+
+    @staticmethod
+    def detect_core_sheets(excel_path: str):
+        sheets = FinancialEngine.list_sheets(excel_path)
+        if not sheets:
+            return None, None
+
+        def score_name(s):
+            u = s.upper()
+            bal = 0
+            er = 0
+            if "FINANCIERA" in u or "BALANCE" in u:
+                bal += 3
+            if "ECONOMICA" in u or "RESULTADOS" in u or "RESULTADO" in u:
+                er += 3
+            if "ESTRUCTURA" in u:
+                bal += 1
+                er += 1
+            return bal, er
+
+        scored = [(s, *score_name(s)) for s in sheets]
+        bal_guess = max(scored, key=lambda x: x[1])[0]
+        er_guess = max(scored, key=lambda x: x[2])[0]
+
+        # Validate parseability; fallback to first parseable sheets.
+        def parseable(sheet):
+            try:
+                parse_multi_year_sheet(excel_path, sheet)
+                return True
+            except Exception:
+                return False
+
+        if not parseable(bal_guess):
+            for s in sheets:
+                if parseable(s):
+                    bal_guess = s
+                    break
+        if not parseable(er_guess):
+            for s in sheets:
+                if s != bal_guess and parseable(s):
+                    er_guess = s
+                    break
+        return bal_guess, er_guess
+
     def load(self) -> FinancialState:
-        balance_wide, bal_years = parse_multi_year_sheet(self.excel_path, "ESTRUCTURA FINANCIERA")
-        er_wide, er_years = parse_multi_year_sheet(self.excel_path, "ESTRUCTURA ECONOMICA")
+        bal_sheet = self.balance_sheet
+        er_sheet = self.er_sheet
+        if not bal_sheet or not er_sheet:
+            auto_bal, auto_er = self.detect_core_sheets(self.excel_path)
+            bal_sheet = bal_sheet or auto_bal
+            er_sheet = er_sheet or auto_er
+        if not bal_sheet or not er_sheet:
+            raise ValueError("No se pudieron identificar hojas base para Balance y Estado de Resultados.")
+
+        balance_wide, bal_years = parse_multi_year_sheet(self.excel_path, bal_sheet)
+        er_wide, er_years = parse_multi_year_sheet(self.excel_path, er_sheet)
         balance_vertical = {y: vertical_analysis_exact(balance_wide, y, [r"^TOTAL\s+ACTIVOS?$"])[0] for y in bal_years}
         er_vertical = {
             y: vertical_analysis_exact(

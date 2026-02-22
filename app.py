@@ -1,12 +1,17 @@
 import os
+from datetime import datetime
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from core_engine import FinancialEngine
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_EXCEL = os.path.join(BASE_DIR, "PlantillaBC_2Grupo No. 1.xlsx")
+OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 engine = None
@@ -52,6 +57,40 @@ def home():
     return render_template("index.html")
 
 
+@app.route("/outputs/<path:filename>")
+def outputs_file(filename):
+    return send_from_directory(OUTPUT_DIR, filename)
+
+
+@app.route("/api/upload", methods=["POST"])
+def upload_excel():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "error": "No se recibió archivo"}), 400
+    ext = os.path.splitext(f.filename or "")[1].lower()
+    if ext not in [".xlsx", ".xls"]:
+        return jsonify({"ok": False, "error": "Solo se permiten .xlsx o .xls"}), 400
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = f"upload_{stamp}{ext}"
+    out_path = os.path.join(UPLOAD_DIR, safe_name)
+    f.save(out_path)
+    return jsonify({"ok": True, "excel_path": out_path})
+
+
+@app.route("/api/discover", methods=["POST"])
+def discover():
+    payload = request.get_json(silent=True) or {}
+    excel_path = payload.get("excel_path", DEFAULT_EXCEL)
+    if not os.path.exists(excel_path):
+        return jsonify({"ok": False, "error": f"No existe el archivo: {excel_path}"}), 400
+    try:
+        sheets = FinancialEngine.list_sheets(excel_path)
+        bal, er = FinancialEngine.detect_core_sheets(excel_path)
+        return jsonify({"ok": True, "excel_path": excel_path, "sheets": sheets, "suggested_balance": bal, "suggested_er": er})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/load", methods=["POST"])
 def load_data():
     global engine
@@ -59,13 +98,17 @@ def load_data():
     excel_path = payload.get("excel_path", DEFAULT_EXCEL)
     if not os.path.exists(excel_path):
         return jsonify({"ok": False, "error": f"No existe el archivo: {excel_path}"}), 400
+    balance_sheet = payload.get("balance_sheet")
+    er_sheet = payload.get("er_sheet")
     try:
-        engine = FinancialEngine(excel_path)
+        engine = FinancialEngine(excel_path, balance_sheet=balance_sheet, er_sheet=er_sheet)
         st = engine.state
         return jsonify(
             {
                 "ok": True,
                 "excel_path": excel_path,
+                "balance_sheet": balance_sheet,
+                "er_sheet": er_sheet,
                 "bal_years": st.bal_years,
                 "er_years": st.er_years,
                 "ratios": list(st.ratios.columns),
@@ -209,6 +252,37 @@ def refresh_wdi():
         return jsonify({"ok": True, "external": _df_records(engine.state.external.rename_axis("Año").reset_index()), "panel": _df_records(engine.state.panel.rename_axis("Año").reset_index())})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/report", methods=["POST"])
+def generate_report():
+    err = _require_engine()
+    if err:
+        return err
+    st = engine.state
+    report_name = f"reporte_financiero_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+    report_path = os.path.join(OUTPUT_DIR, report_name)
+
+    ratios = st.ratios.rename_axis("Año").reset_index().to_html(index=False)
+    balance_h = st.balance_horizontal.head(60).to_html(index=False)
+    er_h = st.er_horizontal.head(60).to_html(index=False)
+    external = st.external.rename_axis("Año").reset_index().to_html(index=False)
+
+    html = f"""<!doctype html>
+<html lang='es'><head><meta charset='utf-8'><title>Reporte Financiero</title>
+<style>body{{font-family:Arial;padding:20px}}table{{border-collapse:collapse;width:100%;font-size:12px}}th,td{{border:1px solid #ddd;padding:6px}}th{{background:#eef}}</style>
+</head><body>
+<h1>Reporte Financiero</h1>
+<p>Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+<h2>Ratios</h2>{ratios}
+<h2>Análisis Horizontal Balance</h2>{balance_h}
+<h2>Análisis Horizontal E.R.</h2>{er_h}
+<h2>Factores Externos</h2>{external}
+</body></html>"""
+
+    with open(report_path, "w", encoding="utf-8") as fh:
+        fh.write(html)
+    return jsonify({"ok": True, "download_url": f"/outputs/{report_name}"})
 
 
 @app.route("/api/pestel", methods=["POST"])

@@ -4,6 +4,8 @@ const statusEl = document.getElementById("status");
 const ratioSelect = document.getElementById("ratioSelect");
 const yearBalSelect = document.getElementById("yearBalSelect");
 const yearErSelect = document.getElementById("yearErSelect");
+const balanceSheetSelect = document.getElementById("balanceSheet");
+const erSheetSelect = document.getElementById("erSheet");
 
 let ratioChart;
 let balChart;
@@ -58,7 +60,11 @@ function renderBarChart(target, labels, values, label) {
 }
 
 async function loadAll() {
-  const data = await apiPost("/api/load", { excel_path: excelPath.value.trim() });
+  const data = await apiPost("/api/load", {
+    excel_path: excelPath.value.trim(),
+    balance_sheet: balanceSheetSelect.value || null,
+    er_sheet: erSheetSelect.value || null,
+  });
   if (!data.ok) {
     setStatus(data.error || "Error cargando", true);
     return;
@@ -74,6 +80,8 @@ async function loadAll() {
   await refreshRatio();
   await refreshVertical("balance");
   await refreshVertical("er");
+  await refreshHorizontal("balance");
+  await refreshHorizontal("er");
   await refreshExternal();
 }
 
@@ -125,6 +133,12 @@ async function refreshHeatmap() {
   document.getElementById("heatTable").innerHTML = `<table><thead>${head}</thead><tbody>${rows.join("")}</tbody></table>`;
 }
 
+async function refreshHorizontal(report) {
+  const data = await apiGet(`/api/horizontal/${report}`);
+  const target = report === "balance" ? "horizontalBalanceTable" : "horizontalErTable";
+  document.getElementById(target).innerHTML = data.ok ? tableFromRecords(data.table) : `<p>${data.error || "Error horizontal"}</p>`;
+}
+
 async function refreshExternal() {
   const data = await apiGet("/api/external");
   document.getElementById("externalTable").innerHTML = data.ok ? tableFromRecords(data.table) : `<p>${data.error || "Error externos"}</p>`;
@@ -139,6 +153,39 @@ async function updateWdi() {
   }
   setStatus(`WDI actualizado para ${country}`);
   document.getElementById("externalTable").innerHTML = tableFromRecords(data.external || []);
+}
+
+async function uploadExcel() {
+  const fileInput = document.getElementById("excelFile");
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) {
+    setStatus("Selecciona un archivo Excel antes de subir.", true);
+    return;
+  }
+  const form = new FormData();
+  form.append("file", file);
+  const resp = await fetch("/api/upload", { method: "POST", body: form });
+  const data = await resp.json();
+  if (!data.ok) {
+    setStatus(data.error || "Error subiendo archivo", true);
+    return;
+  }
+  excelPath.value = data.excel_path;
+  setStatus("Archivo subido correctamente");
+}
+
+async function discoverSheets() {
+  const data = await apiPost("/api/discover", { excel_path: excelPath.value.trim() });
+  if (!data.ok) {
+    setStatus(data.error || "Error detectando hojas", true);
+    return;
+  }
+  const opts = (data.sheets || []).map((s) => `<option value="${s}">${s}</option>`).join("");
+  balanceSheetSelect.innerHTML = opts;
+  erSheetSelect.innerHTML = opts;
+  if (data.suggested_balance) balanceSheetSelect.value = data.suggested_balance;
+  if (data.suggested_er) erSheetSelect.value = data.suggested_er;
+  setStatus("Hojas detectadas automáticamente. Ajusta si hace falta.");
 }
 
 function renderPestelChart(labels, values) {
@@ -183,6 +230,15 @@ async function calcPestel() {
   );
 }
 
+async function generateReport() {
+  const data = await apiPost("/api/report", {});
+  if (!data.ok) {
+    setStatus(data.error || "Error generando reporte", true);
+    return;
+  }
+  window.open(data.download_url, "_blank");
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   excelPath.value = "PlantillaBC_2Grupo No. 1.xlsx";
 
@@ -192,6 +248,9 @@ window.addEventListener("DOMContentLoaded", () => {
   pestelChart = { ctx: document.getElementById("pestelChart").getContext("2d"), chart: null };
 
   document.getElementById("loadBtn").addEventListener("click", loadAll);
+  document.getElementById("uploadBtn").addEventListener("click", uploadExcel);
+  document.getElementById("discoverBtn").addEventListener("click", discoverSheets);
+  document.getElementById("reportBtn").addEventListener("click", generateReport);
   document.getElementById("ratioBtn").addEventListener("click", refreshRatio);
   document.getElementById("balBtn").addEventListener("click", () => refreshVertical("balance"));
   document.getElementById("erBtn").addEventListener("click", () => refreshVertical("er"));
