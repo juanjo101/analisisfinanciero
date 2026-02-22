@@ -54,11 +54,51 @@
         </div>
         <div id="heatTable"></div>
       </section>
+
+      <section class="card">
+        <h2>Factores Externos (WDI)</h2>
+        <div class="row wrap">
+          <label for="country">País ISO3</label>
+          <input id="country" type="text" value="DOM" class="short" />
+          <button id="wdiBtn">Actualizar WDI</button>
+        </div>
+        <p class="hint">Incluye Inflación, PIB real y <strong>USD/DOP</strong> (tasa del dólar).</p>
+        <div id="externalTable" class="table-wrap"></div>
+      </section>
+
+      <section class="card">
+        <h2>Índice PESTEL</h2>
+        <div class="row wrap">
+          <label for="pestelYear">Año</label>
+          <select id="pestelYear" class="short"></select>
+          <label><input id="autoEcon" type="checkbox" checked /> Auto Económico</label>
+        </div>
+        <div class="row wrap">
+          <label>Econ:</label><input id="econW" type="number" value="25" class="short" />
+          <label>Soc:</label><input id="socW" type="number" value="10" class="short" />
+          <label>Geo:</label><input id="geoW" type="number" value="5" class="short" />
+          <label>Pol:</label><input id="polW" type="number" value="25" class="short" />
+          <label>Tec:</label><input id="tecW" type="number" value="25" class="short" />
+          <label>Cul:</label><input id="culW" type="number" value="10" class="short" />
+        </div>
+        <div class="row wrap">
+          <label>Econ manual:</label><input id="econManual" type="number" value="0" class="short" />
+          <label>Soc:</label><input id="socRes" type="number" value="0" class="short" />
+          <label>Geo:</label><input id="geoRes" type="number" value="0" class="short" />
+          <label>Pol:</label><input id="polRes" type="number" value="0" class="short" />
+          <label>Tec:</label><input id="tecRes" type="number" value="0" class="short" />
+          <label>Cul:</label><input id="culRes" type="number" value="0" class="short" />
+          <button id="pestelBtn">Calcular</button>
+        </div>
+        <p id="pestelStatus"></p>
+        <canvas id="pestelChart"></canvas>
+        <div id="pestelTable" class="table-wrap"></div>
+      </section>
     </main>
 
     <section class="card full">
       <h2>Tabla de Ratios</h2>
-      <div id="ratiosTable"></div>
+      <div id="ratiosTable" class="table-wrap"></div>
     </section>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>

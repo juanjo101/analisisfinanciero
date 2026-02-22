@@ -19,6 +19,34 @@ def _df_records(df, max_rows=500):
     return view.replace({float("inf"): None, float("-inf"): None}).where(view.notna(), None).to_dict(orient="records")
 
 
+def _scale_to_score(x, lo, hi, pos_good=True):
+    if x is None:
+        return None
+    try:
+        xf = float(x)
+    except Exception:
+        return None
+    if xf != xf:
+        return None
+    x_clip = min(max(xf, lo), hi)
+    u = (x_clip - lo) / (hi - lo + 1e-9)
+    if not pos_good:
+        u = 1 - u
+    return (u * 2 - 1) * 100
+
+
+def _classify(score):
+    if score <= -15:
+        return "Muy crítico"
+    if score <= -5:
+        return "Crítico"
+    if score <= 5:
+        return "Neutral"
+    if score <= 15:
+        return "Bueno"
+    return "Excelente"
+
+
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -43,6 +71,7 @@ def load_data():
                 "ratios": list(st.ratios.columns),
                 "kpis": [c for c in ["Ventas_YoY_%", "UtilNeta_YoY_%", "Margen Neto", "ROE", "ROA", "Rotación de Activos"] if c in st.panel.columns],
                 "factors": [c for c in engine.FACTOR_CANDIDATES if c in st.panel.columns],
+                "panel_years": [int(y) for y in st.panel.index.tolist()],
             }
         )
     except Exception as e:
@@ -122,6 +151,14 @@ def get_panel():
     return jsonify({"ok": True, "table": _df_records(engine.state.panel.rename_axis("Año").reset_index())})
 
 
+@app.route("/api/external")
+def get_external():
+    err = _require_engine()
+    if err:
+        return err
+    return jsonify({"ok": True, "table": _df_records(engine.state.external.rename_axis("Año").reset_index())})
+
+
 @app.route("/api/heatmap")
 def get_heatmap():
     err = _require_engine()
@@ -172,6 +209,80 @@ def refresh_wdi():
         return jsonify({"ok": True, "external": _df_records(engine.state.external.rename_axis("Año").reset_index()), "panel": _df_records(engine.state.panel.rename_axis("Año").reset_index())})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/pestel", methods=["POST"])
+def pestel():
+    err = _require_engine()
+    if err:
+        return err
+    payload = request.get_json(silent=True) or {}
+    st = engine.state
+
+    year = int(payload.get("year"))
+    weights = {
+        "Económico": float(payload.get("econ_w", 25)),
+        "Social": float(payload.get("soc_w", 10)),
+        "Geográfico": float(payload.get("geo_w", 5)),
+        "Político": float(payload.get("pol_w", 25)),
+        "Tecnológico": float(payload.get("tec_w", 25)),
+        "Cultural": float(payload.get("cul_w", 10)),
+    }
+
+    auto_econ = bool(payload.get("auto_econ", True))
+    econ_manual = float(payload.get("econ_manual", 0))
+    res_manual = {
+        "Social": float(payload.get("soc_res", 0)),
+        "Geográfico": float(payload.get("geo_res", 0)),
+        "Político": float(payload.get("pol_res", 0)),
+        "Tecnológico": float(payload.get("tec_res", 0)),
+        "Cultural": float(payload.get("cul_res", 0)),
+    }
+
+    ext = st.external.copy()
+    econ_auto = None
+    if auto_econ and (year in ext.index):
+        gdp = ext.at[year, "PIB_real_%"] if "PIB_real_%" in ext.columns else None
+        inf = ext.at[year, "Inflación_%"] if "Inflación_%" in ext.columns else None
+        tpm = ext.at[year, "TPM_%"] if "TPM_%" in ext.columns else None
+        fx_score = None
+        if "USD/DOP" in ext.columns and (year - 1) in ext.index:
+            fx = ext.at[year, "USD/DOP"]
+            fx_prev = ext.at[year - 1, "USD/DOP"]
+            if fx_prev not in (0, None) and fx_prev == fx_prev and fx == fx:
+                dep_yoy = (fx / fx_prev - 1) * 100
+                fx_score = _scale_to_score(dep_yoy, lo=-5, hi=30, pos_good=False)
+        scores = [
+            _scale_to_score(gdp, lo=-5, hi=10, pos_good=True),
+            _scale_to_score(inf, lo=0, hi=20, pos_good=False),
+            _scale_to_score(tpm, lo=0, hi=20, pos_good=False),
+            fx_score,
+        ]
+        scores = [s for s in scores if s is not None]
+        econ_auto = float(sum(scores) / len(scores)) if scores else None
+
+    econ_val = econ_auto if (auto_econ and econ_auto is not None) else econ_manual
+    responses = {"Económico": float(econ_val), **res_manual}
+
+    sum_w = sum(weights.values()) or 1.0
+    rows = []
+    total = 0.0
+    for k in ["Económico", "Social", "Geográfico", "Político", "Tecnológico", "Cultural"]:
+        wn = float(weights[k]) / sum_w
+        resv = float(responses[k])
+        aporte = wn * resv
+        total += aporte
+        rows.append(
+            {
+                "Categoría": k,
+                "Peso % (input)": round(weights[k], 2),
+                "Peso % (normalizado)": round(wn * 100, 2),
+                "Resultado %": round(resv, 2),
+                "Aporte ponderado %": round(aporte, 2),
+            }
+        )
+    clas = _classify(total)
+    return jsonify({"ok": True, "score": round(total, 2), "clasificacion": clas, "econ_auto": econ_auto, "table": rows})
 
 
 if __name__ == "__main__":

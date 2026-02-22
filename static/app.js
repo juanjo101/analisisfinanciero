@@ -8,6 +8,7 @@ const yearErSelect = document.getElementById("yearErSelect");
 let ratioChart;
 let balChart;
 let erChart;
+let pestelChart;
 
 function setStatus(msg, isError = false) {
   statusEl.textContent = msg;
@@ -67,11 +68,13 @@ async function loadAll() {
   ratioSelect.innerHTML = data.ratios.map((x) => `<option value="${x}">${x}</option>`).join("");
   yearBalSelect.innerHTML = data.bal_years.map((x) => `<option value="${x}">${x}</option>`).join("");
   yearErSelect.innerHTML = data.er_years.map((x) => `<option value="${x}">${x}</option>`).join("");
+  document.getElementById("pestelYear").innerHTML = (data.panel_years || []).map((x) => `<option value="${x}">${x}</option>`).join("");
 
   await refreshRatiosTable();
   await refreshRatio();
   await refreshVertical("balance");
   await refreshVertical("er");
+  await refreshExternal();
 }
 
 async function refreshRatiosTable() {
@@ -122,16 +125,77 @@ async function refreshHeatmap() {
   document.getElementById("heatTable").innerHTML = `<table><thead>${head}</thead><tbody>${rows.join("")}</tbody></table>`;
 }
 
+async function refreshExternal() {
+  const data = await apiGet("/api/external");
+  document.getElementById("externalTable").innerHTML = data.ok ? tableFromRecords(data.table) : `<p>${data.error || "Error externos"}</p>`;
+}
+
+async function updateWdi() {
+  const country = (document.getElementById("country").value || "DOM").toUpperCase();
+  const data = await apiPost("/api/wdi", { country });
+  if (!data.ok) {
+    setStatus(data.error || "Error actualizando WDI", true);
+    return;
+  }
+  setStatus(`WDI actualizado para ${country}`);
+  document.getElementById("externalTable").innerHTML = tableFromRecords(data.external || []);
+}
+
+function renderPestelChart(labels, values) {
+  if (pestelChart.chart) pestelChart.chart.destroy();
+  pestelChart.chart = new Chart(pestelChart.ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{ label: "Aporte ponderado %", data: values, backgroundColor: "rgba(21,128,61,0.7)" }],
+    },
+    options: { responsive: true },
+  });
+}
+
+async function calcPestel() {
+  const payload = {
+    year: Number(document.getElementById("pestelYear").value),
+    auto_econ: document.getElementById("autoEcon").checked,
+    econ_w: Number(document.getElementById("econW").value),
+    soc_w: Number(document.getElementById("socW").value),
+    geo_w: Number(document.getElementById("geoW").value),
+    pol_w: Number(document.getElementById("polW").value),
+    tec_w: Number(document.getElementById("tecW").value),
+    cul_w: Number(document.getElementById("culW").value),
+    econ_manual: Number(document.getElementById("econManual").value),
+    soc_res: Number(document.getElementById("socRes").value),
+    geo_res: Number(document.getElementById("geoRes").value),
+    pol_res: Number(document.getElementById("polRes").value),
+    tec_res: Number(document.getElementById("tecRes").value),
+    cul_res: Number(document.getElementById("culRes").value),
+  };
+  const data = await apiPost("/api/pestel", payload);
+  if (!data.ok) {
+    document.getElementById("pestelStatus").textContent = data.error || "Error PESTEL";
+    return;
+  }
+  document.getElementById("pestelStatus").textContent = `Índice: ${data.score}% - ${data.clasificacion}${data.econ_auto !== null ? ` (Econ auto: ${Number(data.econ_auto).toFixed(2)})` : ""}`;
+  document.getElementById("pestelTable").innerHTML = tableFromRecords(data.table || []);
+  renderPestelChart(
+    (data.table || []).map((r) => r["Categoría"]),
+    (data.table || []).map((r) => r["Aporte ponderado %"])
+  );
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   excelPath.value = "PlantillaBC_2Grupo No. 1.xlsx";
 
   ratioChart = { ctx: document.getElementById("ratioChart").getContext("2d"), chart: null };
   balChart = { ctx: document.getElementById("balChart").getContext("2d"), chart: null };
   erChart = { ctx: document.getElementById("erChart").getContext("2d"), chart: null };
+  pestelChart = { ctx: document.getElementById("pestelChart").getContext("2d"), chart: null };
 
   document.getElementById("loadBtn").addEventListener("click", loadAll);
   document.getElementById("ratioBtn").addEventListener("click", refreshRatio);
   document.getElementById("balBtn").addEventListener("click", () => refreshVertical("balance"));
   document.getElementById("erBtn").addEventListener("click", () => refreshVertical("er"));
   document.getElementById("heatBtn").addEventListener("click", refreshHeatmap);
+  document.getElementById("wdiBtn").addEventListener("click", updateWdi);
+  document.getElementById("pestelBtn").addEventListener("click", calcPestel);
 });
