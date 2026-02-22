@@ -159,14 +159,22 @@ async function refreshExternal() {
 }
 
 async function updateWdi() {
+  const btn = document.getElementById("wdiBtn");
+  btn.disabled = true;
+  btn.textContent = "Actualizando...";
   const country = (document.getElementById("country").value || "DOM").toUpperCase();
   const data = await apiPost("/api/wdi", { country });
   if (!data.ok) {
     setStatus(data.error || "Error actualizando WDI", true);
+    btn.disabled = false;
+    btn.textContent = "Actualizar WDI";
     return;
   }
-  setStatus(`WDI actualizado para ${country}`);
+  const hasAny = (data.external || []).some((r) => r["Inflación_%"] !== null || r["PIB_real_%"] !== null || r["USD/DOP"] !== null);
+  setStatus(hasAny ? `WDI actualizado para ${country}` : `Sin datos WDI para ${country}. Puedes cargarlos manualmente.`);
   document.getElementById("externalTable").innerHTML = tableFromRecords(data.external || []);
+  btn.disabled = false;
+  btn.textContent = "Actualizar WDI";
 }
 
 async function saveExternalManual() {

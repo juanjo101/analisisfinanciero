@@ -1,8 +1,13 @@
 import os
 from datetime import datetime
+import io
+import base64
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 from core_engine import FinancialEngine
 
@@ -53,9 +58,59 @@ def _classify(score):
     return "Excelente"
 
 
+def _fig_to_base64(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=160, bbox_inches="tight")
+    plt.close(fig)
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def _line_chart_base64(x_labels, y_values, title, y_label="Valor"):
+    fig, ax = plt.subplots(figsize=(8.2, 3.6))
+    ax.plot(x_labels, y_values, marker="o", linewidth=2)
+    ax.set_title(title)
+    ax.set_xlabel("Año")
+    ax.set_ylabel(y_label)
+    ax.grid(True, alpha=0.25)
+    return _fig_to_base64(fig)
+
+
+def _barh_chart_base64(labels, values, title, x_label="Valor"):
+    fig, ax = plt.subplots(figsize=(8.2, 4.6))
+    pos = np.arange(len(labels))
+    ax.barh(pos, values)
+    ax.set_yticks(pos)
+    ax.set_yticklabels(labels, fontsize=7)
+    ax.invert_yaxis()
+    ax.set_title(title)
+    ax.set_xlabel(x_label)
+    ax.grid(axis="x", alpha=0.2)
+    return _fig_to_base64(fig)
+
+
+def _heatmap_base64(matrix, row_labels, col_labels, title):
+    fig, ax = plt.subplots(figsize=(8.2, 4.2))
+    m = np.array([[np.nan if v is None else float(v) for v in row] for row in matrix], dtype=float)
+    im = ax.imshow(m, vmin=-1, vmax=1, cmap="RdBu")
+    ax.set_xticks(range(len(col_labels)))
+    ax.set_xticklabels(col_labels, rotation=30, ha="right", fontsize=8)
+    ax.set_yticks(range(len(row_labels)))
+    ax.set_yticklabels(row_labels, fontsize=8)
+    ax.set_title(title)
+    for i in range(m.shape[0]):
+        for j in range(m.shape[1]):
+            txt = "N/D" if np.isnan(m[i, j]) else f"{m[i, j]:.2f}"
+            ax.text(j, i, txt, ha="center", va="center", fontsize=7, color="black")
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    return _fig_to_base64(fig)
+
+
 @app.route("/")
 def home():
-    return render_template("index.html")
+    app_js = os.path.join(BASE_DIR, "static", "app.js")
+    css = os.path.join(BASE_DIR, "static", "style.css")
+    asset_v = int(max(os.path.getmtime(app_js), os.path.getmtime(css)))
+    return render_template("index.html", asset_v=asset_v)
 
 
 @app.route("/outputs/<path:filename>")
@@ -357,22 +412,156 @@ def generate_report():
     report_name = f"reporte_financiero_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
     report_path = os.path.join(OUTPUT_DIR, report_name)
 
-    ratios = st.ratios.rename_axis("Año").reset_index().to_html(index=False)
-    balance_h = st.balance_horizontal.head(60).to_html(index=False)
-    er_h = st.er_horizontal.head(60).to_html(index=False)
-    external = st.external.rename_axis("Año").reset_index().to_html(index=False)
+    ratios_df = st.ratios.rename_axis("Año").reset_index()
+    ratios = ratios_df.to_html(index=False)
+    balance_h = st.balance_horizontal.head(80).to_html(index=False)
+    er_h = st.er_horizontal.head(80).to_html(index=False)
+    external_df = st.external.rename_axis("Año").reset_index()
+    external = external_df.to_html(index=False)
+
+    chart_imgs = []
+
+    # Ratios: un gráfico por ratio
+    for col in st.ratios.columns:
+        s = st.ratios[col].dropna()
+        if len(s) >= 1:
+            img = _line_chart_base64([str(x) for x in s.index.tolist()], [float(v) for v in s.values.tolist()], f"Ratio: {col}", "Valor")
+            chart_imgs.append((f"Ratio: {col}", img))
+
+    # Vertical balance y ER (último año)
+    if st.bal_years:
+        y = st.bal_years[-1]
+        df = st.balance_vertical[y]
+        pct = f"%_{y}"
+        top = df[["Cuenta", pct]].dropna()
+        top = top[~top["Cuenta"].astype(str).str.contains("TOTAL", case=False, na=False)].sort_values(pct, ascending=False).head(12)
+        if not top.empty:
+            img = _barh_chart_base64(top["Cuenta"].astype(str).tolist(), [float(v) for v in top[pct].tolist()], f"Vertical Balance {y}", "%")
+            chart_imgs.append((f"Vertical Balance {y}", img))
+
+    if st.er_years:
+        y = st.er_years[-1]
+        df = st.er_vertical[y]
+        pct = f"%_{y}"
+        top = df[["Cuenta", pct]].dropna()
+        top = top[~top["Cuenta"].astype(str).str.contains("TOTAL", case=False, na=False)].sort_values(pct, ascending=False).head(12)
+        if not top.empty:
+            img = _barh_chart_base64(top["Cuenta"].astype(str).tolist(), [float(v) for v in top[pct].tolist()], f"Vertical E.R. {y}", "%")
+            chart_imgs.append((f"Vertical E.R. {y}", img))
+
+    # Factores externos clave
+    ext = external_df.copy().sort_values("Año")
+    for col in ["USD/DOP", "Inflación_%", "PIB_real_%", "TPM_%"]:
+        if col in ext.columns:
+            ser = ext[["Año", col]].dropna()
+            if len(ser) >= 1:
+                img = _line_chart_base64([str(int(x)) for x in ser["Año"].tolist()], [float(v) for v in ser[col].tolist()], f"{col} - Histórico", col)
+                chart_imgs.append((f"{col} - Histórico", img))
+
+    # Heatmap correlación (lag 0)
+    kpis = [c for c in ["Ventas_YoY_%", "UtilNeta_YoY_%", "Margen Neto", "ROE", "ROA", "Rotación de Activos"] if c in st.panel.columns]
+    factors = [c for c in ["Inflación_%", "PIB_real_%", "USD/DOP", "TPM_%"] if c in st.panel.columns]
+    if kpis and factors:
+        matrix = []
+        for k in kpis:
+            row = []
+            for f in factors:
+                comp = st.panel[[k, f]].dropna()
+                row.append(None if len(comp) < 2 else float(comp[k].corr(comp[f])))
+            matrix.append(row)
+        chart_imgs.append(("Heatmap correlaciones (lag=0)", _heatmap_base64(matrix, kpis, factors, "Correlaciones KPI vs Factores")))
+
+    # Escenarios FX (KPI Ventas)
+    fx_block = ""
+    try:
+        panel = st.panel.copy().sort_index()
+        if "USD/DOP" in panel.columns and "Ventas" in panel.columns and len(panel) >= 2:
+            fx_yoy = panel["USD/DOP"].pct_change(fill_method=None) * 100
+            kpi_yoy = panel["Ventas"].astype(float).pct_change(fill_method=None) * 100
+            comp = np.vstack([fx_yoy.values, kpi_yoy.values]).T
+            comp = comp[~np.isnan(comp).any(axis=1)]
+            beta = float(np.polyfit(comp[:, 0], comp[:, 1], 1)[0]) if len(comp) >= 2 else -0.25
+            growth = kpi_yoy.replace([np.inf, -np.inf], np.nan).dropna()
+            g = float(growth.mean()) if not growth.empty else 3.0
+            last_year = int(panel.index.max())
+            last_val = float(panel.loc[last_year, "Ventas"])
+            years = [last_year + 1, last_year + 2, last_year + 3]
+            base = []
+            est = []
+            opt = []
+            vb, vs, vo = last_val, last_val, last_val
+            shock = 10.0
+            for _ in years:
+                vb *= 1 + g / 100.0
+                vs *= 1 + (g + beta * shock) / 100.0
+                vo *= 1 + (g - beta * shock) / 100.0
+                base.append(vb)
+                est.append(vs)
+                opt.append(vo)
+            fig, ax = plt.subplots(figsize=(8.2, 3.8))
+            hx = [str(int(y)) for y in panel.index.tolist()]
+            ax.plot(hx, panel["Ventas"].tolist(), marker="o", label="Histórico")
+            px = [str(y) for y in years]
+            ax.plot(px, base, marker="o", linestyle="--", label="Base")
+            ax.plot(px, est, marker="o", linestyle="--", label="Estrés")
+            ax.plot(px, opt, marker="o", linestyle="--", label="Optimista")
+            ax.set_title("Escenarios FX para Ventas (shock 10%)")
+            ax.set_xlabel("Año")
+            ax.set_ylabel("Ventas")
+            ax.grid(True, alpha=0.25)
+            ax.legend()
+            fx_img = _fig_to_base64(fig)
+            fx_block = f"<h2>Escenarios FX</h2><p>Elasticidad estimada Ventas vs USD/DOP: <b>{beta:.4f}</b></p><img src='data:image/png;base64,{fx_img}' />"
+    except Exception:
+        fx_block = ""
+
+    charts_html = "".join([f"<section class='chart'><h3>{title}</h3><img src='data:image/png;base64,{img}' /></section>" for title, img in chart_imgs])
 
     html = f"""<!doctype html>
-<html lang='es'><head><meta charset='utf-8'><title>Reporte Financiero</title>
-<style>body{{font-family:Arial;padding:20px}}table{{border-collapse:collapse;width:100%;font-size:12px}}th,td{{border:1px solid #ddd;padding:6px}}th{{background:#eef}}</style>
-</head><body>
-<h1>Reporte Financiero</h1>
-<p>Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-<h2>Ratios</h2>{ratios}
-<h2>Análisis Horizontal Balance</h2>{balance_h}
-<h2>Análisis Horizontal E.R.</h2>{er_h}
-<h2>Factores Externos</h2>{external}
-</body></html>"""
+<html lang='es'>
+<head>
+  <meta charset='utf-8'>
+  <title>Reporte Financiero</title>
+  <style>
+    @page {{ size: letter; margin: 0.5in; }}
+    body {{ font-family: Arial, sans-serif; color:#111827; }}
+    h1 {{ margin: 0 0 8px 0; }}
+    h2 {{ margin: 14px 0 8px 0; page-break-after: avoid; }}
+    h3 {{ margin: 8px 0; font-size: 14px; }}
+    p {{ margin: 6px 0; }}
+    table {{ border-collapse: collapse; width: 100%; font-size: 10px; table-layout: fixed; }}
+    th, td {{ border: 1px solid #d1d5db; padding: 4px; word-wrap: break-word; }}
+    th {{ background: #eef2ff; }}
+    .page-break {{ page-break-before: always; }}
+    .chart {{ margin-bottom: 12px; page-break-inside: avoid; }}
+    img {{ width: 100%; max-width: 7.8in; height: auto; border: 1px solid #e5e7eb; }}
+    .small-note {{ color:#374151; font-size:11px; }}
+  </style>
+</head>
+<body>
+  <h1>Reporte Financiero Completo</h1>
+  <p class='small-note'>Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+  <p class='small-note'>Archivo: {os.path.basename(engine.excel_path)}</p>
+
+  <h2>Ratios</h2>
+  {ratios}
+
+  <div class='page-break'></div>
+  <h2>Gráficos</h2>
+  {charts_html}
+  {fx_block}
+
+  <div class='page-break'></div>
+  <h2>Análisis Horizontal Balance</h2>
+  {balance_h}
+
+  <h2>Análisis Horizontal E.R.</h2>
+  {er_h}
+
+  <h2>Factores Externos</h2>
+  {external}
+</body>
+</html>"""
 
     with open(report_path, "w", encoding="utf-8") as fh:
         fh.write(html)
