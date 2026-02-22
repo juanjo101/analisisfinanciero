@@ -30,7 +30,66 @@ def _to_number(x):
         return np.nan
 
 
-def parse_multi_year_sheet(path: str, sheet_name: str) -> Tuple[pd.DataFrame, List[str]]:
+def parse_multi_year_sheet(path: str, sheet_name: str, account_col: str = None, year_cols: List[str] = None) -> Tuple[pd.DataFrame, List[str]]:
+    # Formato normalizado: columnas con encabezado y años en nombres de columna.
+    try:
+        dfh = pd.read_excel(path, sheet_name=sheet_name)
+        if not dfh.empty:
+            cols = list(dfh.columns)
+
+            def _norm(c):
+                return str(c).strip()
+
+            def _year_from_col(c):
+                cs = _norm(c)
+                # Caso numérico directo: 2024, 2023.0
+                try:
+                    fv = float(cs)
+                    iv = int(fv)
+                    if 1900 <= iv <= 2100:
+                        return str(iv)
+                except Exception:
+                    pass
+                # Caso string con año embebido
+                m = re.search(r"(19|20)\d{2}", cs)
+                return m.group(0) if m else None
+
+            # Columna cuenta preferida (o mapeada)
+            cuenta_candidates = ["Cuenta", "CONCEPTO", "Concepto", "CONCEPTOS", "Conceptos", "Cuenta_Original"]
+            cuenta_col = account_col if (account_col in cols) else next((c for c in cols if _norm(c) in cuenta_candidates), None)
+            if cuenta_col is None and len(cols) > 0:
+                # fallback: buscar campo textual dominante
+                for c in cols:
+                    if dfh[c].astype(str).str.len().mean() > 8:
+                        cuenta_col = c
+                        break
+
+            ymap = []
+            if year_cols:
+                for c in year_cols:
+                    if c in cols:
+                        y = _year_from_col(c) or str(c)
+                        ymap.append((c, y))
+            else:
+                for c in cols:
+                    y = _year_from_col(c)
+                    if y is not None:
+                        ymap.append((c, y))
+
+            if cuenta_col is not None and len(ymap) >= 2:
+                out = pd.DataFrame({"Cuenta": dfh[cuenta_col].astype(str).str.strip()})
+                years = sorted(set(y for _, y in ymap))
+                for y in years:
+                    ycols = [c for c, yy in ymap if yy == y]
+                    out[y] = dfh[ycols].applymap(_to_number).sum(axis=1, skipna=True)
+                out = out.dropna(how="all", subset=years)
+                out = out[out["Cuenta"].astype(str).str.strip().str.lower() != "nan"].reset_index(drop=True)
+                if not out.empty:
+                    return out, years
+    except Exception:
+        pass
+
+    # Formato plantilla original: fila con etiqueta "CONCEPTOS" y años en encabezado inferior.
     df = pd.read_excel(path, sheet_name=sheet_name, header=None)
     hdr = None
     for r in range(min(60, df.shape[0])):
@@ -155,10 +214,12 @@ class FinancialState:
 class FinancialEngine:
     FACTOR_CANDIDATES = ["Inflación_%", "PIB_real_%", "USD/DOP", "TPM_%"]
 
-    def __init__(self, excel_path: str, balance_sheet: str = None, er_sheet: str = None):
+    def __init__(self, excel_path: str, balance_sheet: str = None, er_sheet: str = None, balance_map: Dict = None, er_map: Dict = None):
         self.excel_path = excel_path
         self.balance_sheet = balance_sheet
         self.er_sheet = er_sheet
+        self.balance_map = balance_map or {}
+        self.er_map = er_map or {}
         self.state = self.load()
 
     @staticmethod
@@ -208,6 +269,40 @@ class FinancialEngine:
                     break
         return bal_guess, er_guess
 
+    @staticmethod
+    def profile_sheet(excel_path: str, sheet_name: str):
+        df = pd.read_excel(excel_path, sheet_name=sheet_name)
+        cols = list(df.columns)
+
+        def _year_col(c):
+            cs = str(c).strip()
+            try:
+                fv = float(cs)
+                iv = int(fv)
+                if 1900 <= iv <= 2100:
+                    return True
+            except Exception:
+                pass
+            return bool(re.search(r"(19|20)\d{2}", cs))
+
+        suggested_account = None
+        for cand in ["Cuenta", "Cuenta_Original", "CONCEPTO", "Concepto", "CONCEPTOS"]:
+            if cand in cols:
+                suggested_account = cand
+                break
+        if suggested_account is None and cols:
+            for c in cols:
+                if df[c].astype(str).str.len().mean() > 8:
+                    suggested_account = c
+                    break
+
+        suggested_year_cols = [c for c in cols if _year_col(c)]
+        return {
+            "columns": [str(c) for c in cols],
+            "suggested_account": str(suggested_account) if suggested_account is not None else None,
+            "suggested_year_cols": [str(c) for c in suggested_year_cols],
+        }
+
     def load(self) -> FinancialState:
         bal_sheet = self.balance_sheet
         er_sheet = self.er_sheet
@@ -218,8 +313,18 @@ class FinancialEngine:
         if not bal_sheet or not er_sheet:
             raise ValueError("No se pudieron identificar hojas base para Balance y Estado de Resultados.")
 
-        balance_wide, bal_years = parse_multi_year_sheet(self.excel_path, bal_sheet)
-        er_wide, er_years = parse_multi_year_sheet(self.excel_path, er_sheet)
+        balance_wide, bal_years = parse_multi_year_sheet(
+            self.excel_path,
+            bal_sheet,
+            account_col=self.balance_map.get("account_col"),
+            year_cols=self.balance_map.get("year_cols"),
+        )
+        er_wide, er_years = parse_multi_year_sheet(
+            self.excel_path,
+            er_sheet,
+            account_col=self.er_map.get("account_col"),
+            year_cols=self.er_map.get("year_cols"),
+        )
         balance_vertical = {y: vertical_analysis_exact(balance_wide, y, [r"^TOTAL\s+ACTIVOS?$"])[0] for y in bal_years}
         er_vertical = {
             y: vertical_analysis_exact(

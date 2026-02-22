@@ -147,6 +147,22 @@ def discover():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/profile-sheet", methods=["POST"])
+def profile_sheet():
+    payload = request.get_json(silent=True) or {}
+    excel_path = payload.get("excel_path", DEFAULT_EXCEL)
+    sheet_name = payload.get("sheet_name")
+    if not sheet_name:
+        return jsonify({"ok": False, "error": "Falta sheet_name"}), 400
+    if not os.path.exists(excel_path):
+        return jsonify({"ok": False, "error": f"No existe el archivo: {excel_path}"}), 400
+    try:
+        profile = FinancialEngine.profile_sheet(excel_path, sheet_name)
+        return jsonify({"ok": True, **profile})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/load", methods=["POST"])
 def load_data():
     global engine
@@ -156,8 +172,16 @@ def load_data():
         return jsonify({"ok": False, "error": f"No existe el archivo: {excel_path}"}), 400
     balance_sheet = payload.get("balance_sheet")
     er_sheet = payload.get("er_sheet")
+    balance_map = payload.get("balance_map") or {}
+    er_map = payload.get("er_map") or {}
     try:
-        engine = FinancialEngine(excel_path, balance_sheet=balance_sheet, er_sheet=er_sheet)
+        engine = FinancialEngine(
+            excel_path,
+            balance_sheet=balance_sheet,
+            er_sheet=er_sheet,
+            balance_map=balance_map,
+            er_map=er_map,
+        )
         st = engine.state
         return jsonify(
             {
@@ -515,6 +539,67 @@ def generate_report():
     except Exception:
         fx_block = ""
 
+    # Resumen ejecutivo automático
+    exec_lines = []
+    try:
+        # 1) Crecimiento de ventas y utilidad neta
+        panel_sorted = st.panel.copy().sort_index()
+        ventas = panel_sorted["Ventas"].dropna() if "Ventas" in panel_sorted.columns else None
+        util = panel_sorted["Utilidad Neta"].dropna() if "Utilidad Neta" in panel_sorted.columns else None
+        if ventas is not None and len(ventas) >= 2:
+            g_ventas = (ventas.iloc[-1] / ventas.iloc[0] - 1) * 100 if ventas.iloc[0] else np.nan
+            exec_lines.append(f"Las ventas muestran una variación acumulada de <b>{g_ventas:,.2f}%</b> en el período analizado.")
+        if util is not None and len(util) >= 2:
+            g_util = (util.iloc[-1] / util.iloc[0] - 1) * 100 if util.iloc[0] else np.nan
+            exec_lines.append(f"La utilidad neta registra una variación acumulada de <b>{g_util:,.2f}%</b>.")
+
+        # 2) Liquidez y endeudamiento (último año)
+        if not st.ratios.empty:
+            last_year_ratio = st.ratios.index[-1]
+            liq = st.ratios.loc[last_year_ratio, "Liquidez Corriente"] if "Liquidez Corriente" in st.ratios.columns else np.nan
+            deuda = st.ratios.loc[last_year_ratio, "Endeudamiento (Pasivo/Activo)"] if "Endeudamiento (Pasivo/Activo)" in st.ratios.columns else np.nan
+            if liq == liq:
+                msg_liq = "adecuada" if liq >= 1 else "ajustada"
+                exec_lines.append(f"La liquidez corriente del último año ({last_year_ratio}) es <b>{liq:,.2f}</b>, indicando una posición de caja {msg_liq}.")
+            if deuda == deuda:
+                nivel = "alto" if deuda > 0.65 else "moderado" if deuda > 0.45 else "bajo"
+                exec_lines.append(f"El nivel de endeudamiento (Pasivo/Activo) se ubica en <b>{deuda*100:,.2f}%</b>, considerado {nivel}.")
+
+        # 3) FX y sensibilidad estimada
+        if "USD/DOP" in st.panel.columns and "Ventas" in st.panel.columns:
+            fx_yoy = st.panel["USD/DOP"].pct_change(fill_method=None) * 100
+            v_yoy = st.panel["Ventas"].pct_change(fill_method=None) * 100
+            comp = pd.DataFrame({"fx": fx_yoy, "v": v_yoy}).dropna()
+            if len(comp) >= 2:
+                beta = float(np.polyfit(comp["fx"].values, comp["v"].values, 1)[0])
+                sentido = "negativa" if beta < 0 else "positiva"
+                exec_lines.append(
+                    f"La sensibilidad estimada de Ventas ante variaciones del USD/DOP es <b>{beta:,.4f}</b> ({sentido}), útil para escenarios de tipo de cambio."
+                )
+
+        # 4) Correlaciones (heatmap) top
+        if kpis and factors:
+            best_pair = None
+            best_abs = -1
+            for i, k in enumerate(kpis):
+                for j, f in enumerate(factors):
+                    comp = st.panel[[k, f]].dropna()
+                    if len(comp) >= 2:
+                        c = float(comp[k].corr(comp[f]))
+                        if abs(c) > best_abs:
+                            best_abs = abs(c)
+                            best_pair = (k, f, c)
+            if best_pair:
+                k, f, c = best_pair
+                exec_lines.append(f"La relación más relevante observada es <b>{k}</b> vs <b>{f}</b> con correlación <b>{c:,.3f}</b>.")
+    except Exception:
+        pass
+
+    if not exec_lines:
+        exec_lines = ["No se pudo construir el resumen ejecutivo con los datos disponibles."]
+
+    exec_html = "<ul>" + "".join([f"<li>{line}</li>" for line in exec_lines]) + "</ul>"
+
     charts_html = "".join([f"<section class='chart'><h3>{title}</h3><img src='data:image/png;base64,{img}' /></section>" for title, img in chart_imgs])
 
     html = f"""<!doctype html>
@@ -542,6 +627,9 @@ def generate_report():
   <h1>Reporte Financiero Completo</h1>
   <p class='small-note'>Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
   <p class='small-note'>Archivo: {os.path.basename(engine.excel_path)}</p>
+
+  <h2>Resumen Ejecutivo</h2>
+  {exec_html}
 
   <h2>Ratios</h2>
   {ratios}

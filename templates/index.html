@@ -20,6 +20,14 @@
         <button id="loadBtn">Cargar</button>
         <button id="reportBtn">Generar reporte</button>
       </div>
+      <div class="row wrap">
+        <label>Balance cuenta:</label><select id="balAccount" class="short"></select>
+        <label>Balance años (coma):</label><input id="balYearsCols" type="text" placeholder="2024,2023,2022" />
+      </div>
+      <div class="row wrap">
+        <label>E.R. cuenta:</label><select id="erAccount" class="short"></select>
+        <label>E.R. años (coma):</label><input id="erYearsCols" type="text" placeholder="2024,2023,2022" />
+      </div>
       <p id="status"></p>
     </header>
 
@@ -88,6 +96,7 @@
           <input id="extTpm" type="number" step="0.01" placeholder="TPM %" class="short" />
           <button id="saveExternalBtn">Guardar dato manual</button>
         </div>
+        <canvas id="fxRateChart"></canvas>
         <div id="externalTable" class="table-wrap"></div>
       </section>
 

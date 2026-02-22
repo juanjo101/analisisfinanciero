@@ -6,12 +6,17 @@ const yearBalSelect = document.getElementById("yearBalSelect");
 const yearErSelect = document.getElementById("yearErSelect");
 const balanceSheetSelect = document.getElementById("balanceSheet");
 const erSheetSelect = document.getElementById("erSheet");
+const balAccount = document.getElementById("balAccount");
+const erAccount = document.getElementById("erAccount");
+const balYearsCols = document.getElementById("balYearsCols");
+const erYearsCols = document.getElementById("erYearsCols");
 
 let ratioChart;
 let balChart;
 let erChart;
 let pestelChart;
 let fxChart;
+let fxRateChart;
 
 function setStatus(msg, isError = false) {
   statusEl.textContent = msg;
@@ -61,10 +66,26 @@ function renderBarChart(target, labels, values, label) {
 }
 
 async function loadAll() {
+  const balanceMap = {
+    account_col: balAccount.value || null,
+    year_cols: (balYearsCols.value || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  };
+  const erMap = {
+    account_col: erAccount.value || null,
+    year_cols: (erYearsCols.value || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  };
   const data = await apiPost("/api/load", {
     excel_path: excelPath.value.trim(),
     balance_sheet: balanceSheetSelect.value || null,
     er_sheet: erSheetSelect.value || null,
+    balance_map: balanceMap,
+    er_map: erMap,
   });
   if (!data.ok) {
     setStatus(data.error || "Error cargando", true);
@@ -79,13 +100,7 @@ async function loadAll() {
   const fxKpis = ["Ventas", "Utilidad Neta", ...(data.kpis || [])];
   document.getElementById("fxKpi").innerHTML = fxKpis.map((x) => `<option value="${x}">${x}</option>`).join("");
 
-  await refreshRatiosTable();
-  await refreshRatio();
-  await refreshVertical("balance");
-  await refreshVertical("er");
-  await refreshHorizontal("balance");
-  await refreshHorizontal("er");
-  await refreshExternal();
+  await Promise.all([refreshRatiosTable(), refreshRatio(), refreshVertical("balance"), refreshVertical("er"), refreshHorizontal("balance"), refreshHorizontal("er"), refreshExternal()]);
 }
 
 async function refreshRatiosTable() {
@@ -133,7 +148,11 @@ async function refreshHeatmap() {
     const cols = data.matrix[i]
       .map((x, j) => {
         const n = data.n_obs && data.n_obs[i] ? data.n_obs[i][j] : null;
-        return `<td>${x === null ? `N/D${n !== null ? ` (n=${n})` : ""}` : Number(x).toFixed(3)}</td>`;
+        if (x === null) return `<td class="cell-na">N/D${n !== null ? ` (n=${n})` : ""}</td>`;
+        const v = Number(x);
+        const hue = v >= 0 ? 210 : 8;
+        const alpha = Math.min(0.85, Math.max(0.12, Math.abs(v)));
+        return `<td style="background: hsla(${hue}, 80%, 52%, ${alpha}); color:#0b1324; font-weight:600;">${v.toFixed(3)}</td>`;
       })
       .join("");
     return `<tr><th>${k}</th>${cols}</tr>`;
@@ -155,7 +174,12 @@ async function refreshHorizontal(report) {
 
 async function refreshExternal() {
   const data = await apiGet("/api/external");
-  document.getElementById("externalTable").innerHTML = data.ok ? tableFromRecords(data.table) : `<p>${data.error || "Error externos"}</p>`;
+  if (!data.ok) {
+    document.getElementById("externalTable").innerHTML = `<p>${data.error || "Error externos"}</p>`;
+    return;
+  }
+  document.getElementById("externalTable").innerHTML = tableFromRecords(data.table);
+  renderFxRateChart(data.table || []);
 }
 
 async function updateWdi() {
@@ -173,6 +197,7 @@ async function updateWdi() {
   const hasAny = (data.external || []).some((r) => r["Inflación_%"] !== null || r["PIB_real_%"] !== null || r["USD/DOP"] !== null);
   setStatus(hasAny ? `WDI actualizado para ${country}` : `Sin datos WDI para ${country}. Puedes cargarlos manualmente.`);
   document.getElementById("externalTable").innerHTML = tableFromRecords(data.external || []);
+  renderFxRateChart(data.external || []);
   btn.disabled = false;
   btn.textContent = "Actualizar WDI";
 }
@@ -196,6 +221,23 @@ async function saveExternalManual() {
   }
   setStatus("Dato externo guardado.");
   document.getElementById("externalTable").innerHTML = tableFromRecords(data.external || []);
+  renderFxRateChart(data.external || []);
+}
+
+function renderFxRateChart(rows) {
+  const clean = (rows || [])
+    .filter((r) => r["Año"] !== null && r["USD/DOP"] !== null)
+    .map((r) => ({ x: String(r["Año"]), y: Number(r["USD/DOP"]) }))
+    .sort((a, b) => Number(a.x) - Number(b.x));
+  if (fxRateChart.chart) fxRateChart.chart.destroy();
+  fxRateChart.chart = new Chart(fxRateChart.ctx, {
+    type: "line",
+    data: {
+      labels: clean.map((p) => p.x),
+      datasets: [{ label: "USD/DOP", data: clean.map((p) => p.y), borderColor: "#7c3aed", backgroundColor: "rgba(124,58,237,0.2)" }],
+    },
+    options: { responsive: true, plugins: { legend: { display: true } } },
+  });
 }
 
 async function uploadExcel() {
@@ -228,7 +270,22 @@ async function discoverSheets() {
   erSheetSelect.innerHTML = opts;
   if (data.suggested_balance) balanceSheetSelect.value = data.suggested_balance;
   if (data.suggested_er) erSheetSelect.value = data.suggested_er;
+  await profileMapping();
   setStatus("Hojas detectadas automáticamente. Ajusta si hace falta.");
+}
+
+async function profileOne(sheetName, accountSelectEl, yearsInputEl) {
+  if (!sheetName) return;
+  const data = await apiPost("/api/profile-sheet", { excel_path: excelPath.value.trim(), sheet_name: sheetName });
+  if (!data.ok) return;
+  accountSelectEl.innerHTML = (data.columns || []).map((c) => `<option value="${c}">${c}</option>`).join("");
+  if (data.suggested_account) accountSelectEl.value = data.suggested_account;
+  yearsInputEl.value = (data.suggested_year_cols || []).join(", ");
+}
+
+async function profileMapping() {
+  await profileOne(balanceSheetSelect.value, balAccount, balYearsCols);
+  await profileOne(erSheetSelect.value, erAccount, erYearsCols);
 }
 
 function renderPestelChart(labels, values) {
@@ -323,6 +380,7 @@ window.addEventListener("DOMContentLoaded", () => {
   erChart = { ctx: document.getElementById("erChart").getContext("2d"), chart: null };
   pestelChart = { ctx: document.getElementById("pestelChart").getContext("2d"), chart: null };
   fxChart = { ctx: document.getElementById("fxChart").getContext("2d"), chart: null };
+  fxRateChart = { ctx: document.getElementById("fxRateChart").getContext("2d"), chart: null };
 
   document.getElementById("loadBtn").addEventListener("click", loadAll);
   document.getElementById("uploadBtn").addEventListener("click", uploadExcel);
@@ -336,4 +394,6 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("saveExternalBtn").addEventListener("click", saveExternalManual);
   document.getElementById("pestelBtn").addEventListener("click", calcPestel);
   document.getElementById("fxBtn").addEventListener("click", runFxImpact);
+  balanceSheetSelect.addEventListener("change", profileMapping);
+  erSheetSelect.addEventListener("change", profileMapping);
 });
