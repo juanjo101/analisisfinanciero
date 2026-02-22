@@ -598,7 +598,152 @@ def generate_report():
     if not exec_lines:
         exec_lines = ["No se pudo construir el resumen ejecutivo con los datos disponibles."]
 
-    exec_html = "<ul>" + "".join([f"<li>{line}</li>" for line in exec_lines]) + "</ul>"
+    period_txt = "N/D"
+    try:
+        years_union = sorted(set([int(y) for y in st.bal_years] + [int(y) for y in st.er_years]))
+        if years_union:
+            period_txt = f"{years_union[0]}-{years_union[-1]}"
+    except Exception:
+        pass
+
+    recomendacion = (
+        "Fortalecer el monitoreo mensual de liquidez, margen neto y exposición cambiaria; "
+        "actualizar escenarios de estrés con cada cierre contable para ajustar decisiones operativas y financieras."
+    )
+    if not st.ratios.empty and "Endeudamiento (Pasivo/Activo)" in st.ratios.columns:
+        last_debt = float(st.ratios["Endeudamiento (Pasivo/Activo)"].dropna().iloc[-1]) if len(st.ratios["Endeudamiento (Pasivo/Activo)"].dropna()) else np.nan
+        if last_debt == last_debt and last_debt > 0.65:
+            recomendacion = (
+                "Priorizar reducción de deuda y cobertura de riesgos financieros; "
+                "revisar estructura de costos y políticas de inversión para mejorar resiliencia."
+            )
+
+    hallazgos_html = "<ul>" + "".join([f"<li>{line}</li>" for line in exec_lines]) + "</ul>"
+
+    # Portada ejecutiva (1 página)
+    def _kpi_cell(label, value):
+        return f"<div class='kpi'><div class='kpi-label'>{label}</div><div class='kpi-value'>{value}</div></div>"
+
+    liq_txt, deuda_txt, margen_txt, roe_txt = "N/D", "N/D", "N/D", "N/D"
+    sem_liq, sem_deuda, sem_margen = "neutral", "neutral", "neutral"
+    ultimo_anio = "N/D"
+    try:
+        if not st.ratios.empty:
+            ultimo_anio = str(st.ratios.index[-1])
+            if "Liquidez Corriente" in st.ratios.columns:
+                liq_v = float(st.ratios["Liquidez Corriente"].dropna().iloc[-1]) if len(st.ratios["Liquidez Corriente"].dropna()) else np.nan
+                if liq_v == liq_v:
+                    liq_txt = f"{liq_v:,.2f}x"
+                    sem_liq = "good" if liq_v >= 1.0 else "warn"
+            if "Endeudamiento (Pasivo/Activo)" in st.ratios.columns:
+                deuda_v = float(st.ratios["Endeudamiento (Pasivo/Activo)"].dropna().iloc[-1]) if len(st.ratios["Endeudamiento (Pasivo/Activo)"].dropna()) else np.nan
+                if deuda_v == deuda_v:
+                    deuda_txt = f"{deuda_v*100:,.2f}%"
+                    sem_deuda = "good" if deuda_v <= 0.45 else ("warn" if deuda_v <= 0.65 else "bad")
+            if "Margen Neto" in st.ratios.columns:
+                margen_v = float(st.ratios["Margen Neto"].dropna().iloc[-1]) if len(st.ratios["Margen Neto"].dropna()) else np.nan
+                if margen_v == margen_v:
+                    margen_txt = f"{margen_v*100:,.2f}%"
+                    sem_margen = "good" if margen_v >= 0.10 else ("warn" if margen_v >= 0.05 else "bad")
+            if "ROE" in st.ratios.columns:
+                roe_v = float(st.ratios["ROE"].dropna().iloc[-1]) if len(st.ratios["ROE"].dropna()) else np.nan
+                if roe_v == roe_v:
+                    roe_txt = f"{roe_v*100:,.2f}%"
+    except Exception:
+        pass
+
+    priorities = [
+        "Monitorear mensualmente liquidez corriente y prueba ácida para asegurar cobertura de compromisos de corto plazo.",
+        "Ajustar presupuesto y estructura de costos ante cambios de inflación y tipo de cambio USD/DOP.",
+        "Actualizar escenarios base/estrés/optimista para anticipar impactos en ventas y rentabilidad.",
+    ]
+    portada_exec_html = f"""
+    <section class='one-page'>
+      <h2>Resumen Gerencial (1 página)</h2>
+      <p><b>Corte:</b> {ultimo_anio} | <b>Periodo analizado:</b> {period_txt} | <b>Archivo fuente:</b> {os.path.basename(engine.excel_path)}</p>
+      <div class='kpi-grid'>
+        {_kpi_cell("Liquidez Corriente", liq_txt)}
+        {_kpi_cell("Endeudamiento (Pasivo/Activo)", deuda_txt)}
+        {_kpi_cell("Margen Neto", margen_txt)}
+        {_kpi_cell("ROE", roe_txt)}
+      </div>
+      <h3>Semáforo Financiero</h3>
+      <table>
+        <thead><tr><th>Indicador</th><th>Estado</th><th>Criterio</th></tr></thead>
+        <tbody>
+          <tr><td>Liquidez Corriente</td><td><span class='badge {sem_liq}'>{'Favorable' if sem_liq=='good' else ('Atención' if sem_liq=='warn' else 'Crítico')}</span></td><td>Favorable si >= 1.00</td></tr>
+          <tr><td>Endeudamiento</td><td><span class='badge {sem_deuda}'>{'Favorable' if sem_deuda=='good' else ('Atención' if sem_deuda=='warn' else 'Crítico')}</span></td><td>Favorable <= 45%, Atención 45%-65%, Crítico > 65%</td></tr>
+          <tr><td>Margen Neto</td><td><span class='badge {sem_margen}'>{'Favorable' if sem_margen=='good' else ('Atención' if sem_margen=='warn' else 'Crítico')}</span></td><td>Favorable >= 10%, Atención 5%-10%, Crítico < 5%</td></tr>
+        </tbody>
+      </table>
+      <h3>Prioridades Ejecutivas</h3>
+      <ul>{"".join([f"<li>{p}</li>" for p in priorities])}</ul>
+    </section>
+    """
+
+    exec_html = f"""
+    <section class='exec-box'>
+      <h3>Visión General</h3>
+      <p>Este reporte evalúa la situación financiera para el período <b>{period_txt}</b>, integrando desempeño interno, sensibilidad frente a variables macroeconómicas y escenarios de riesgo.</p>
+      <h3>Hallazgos Clave</h3>
+      {hallazgos_html}
+      <h3>Recomendación Ejecutiva</h3>
+      <p>{recomendacion}</p>
+    </section>
+    """
+
+    desc_ratios = """
+    <table>
+      <thead><tr><th>Elemento</th><th>Descripción ejecutiva</th><th>Lectura rápida</th></tr></thead>
+      <tbody>
+        <tr><td>Liquidez Corriente</td><td>Capacidad de cubrir pasivos corrientes con activos corrientes.</td><td>&gt;1 suele indicar cobertura adecuada de obligaciones de corto plazo.</td></tr>
+        <tr><td>Prueba Ácida</td><td>Liquidez más estricta, excluyendo inventarios.</td><td>Evalúa solvencia inmediata sin depender de rotación de inventario.</td></tr>
+        <tr><td>Endeudamiento (Pasivo/Activo)</td><td>Proporción de activos financiados por deuda.</td><td>Niveles altos incrementan presión financiera y riesgo de refinanciación.</td></tr>
+        <tr><td>Apalancamiento (Activo/Patrimonio)</td><td>Relación entre activos totales y recursos propios.</td><td>Mayor valor implica mayor uso de financiamiento externo.</td></tr>
+        <tr><td>Margen Neto</td><td>Utilidad neta generada por cada unidad monetaria de ventas.</td><td>Permite medir eficiencia final del negocio.</td></tr>
+        <tr><td>ROA</td><td>Rentabilidad de los activos.</td><td>Mide qué tan productiva es la base de activos.</td></tr>
+        <tr><td>ROE</td><td>Rentabilidad para los accionistas.</td><td>Indica retorno sobre el capital propio.</td></tr>
+        <tr><td>Rotación de Activos</td><td>Nivel de ventas producido por cada unidad monetaria invertida en activos.</td><td>Mayor rotación sugiere mayor eficiencia operativa.</td></tr>
+      </tbody>
+    </table>
+    """
+
+    desc_externos = """
+    <table>
+      <thead><tr><th>Elemento</th><th>Descripción ejecutiva</th><th>Uso analítico</th></tr></thead>
+      <tbody>
+        <tr><td>Inflación %</td><td>Variación anual del nivel general de precios.</td><td>Ayuda a interpretar presión en costos y poder de compra.</td></tr>
+        <tr><td>PIB real %</td><td>Crecimiento económico descontando inflación.</td><td>Sirve para evaluar demanda agregada y ciclo económico.</td></tr>
+        <tr><td>USD/DOP</td><td>Tasa de cambio del dólar frente al peso dominicano.</td><td>Permite medir exposición cambiaria e impacto en ventas/costos.</td></tr>
+        <tr><td>TPM %</td><td>Tasa de Política Monetaria.</td><td>Referencia para costo del crédito y condiciones financieras.</td></tr>
+      </tbody>
+    </table>
+    """
+
+    desc_analitica = """
+    <table>
+      <thead><tr><th>Elemento</th><th>Descripción ejecutiva</th><th>Lectura rápida</th></tr></thead>
+      <tbody>
+        <tr><td>Vertical Balance / E.R.</td><td>Peso porcentual de cada cuenta dentro del total del estado.</td><td>Muestra estructura financiera y de resultados por año.</td></tr>
+        <tr><td>Horizontal Balance / E.R.</td><td>Variación interanual de cada cuenta.</td><td>Detecta aceleraciones, caídas y cambios estructurales.</td></tr>
+        <tr><td>Heatmap de correlaciones</td><td>Relación estadística entre KPIs internos y factores externos.</td><td>Valores cercanos a -1 o +1 sugieren mayor asociación lineal.</td></tr>
+        <tr><td>Escenarios FX</td><td>Proyección de ventas bajo supuestos de estrés/base/optimista por tipo de cambio.</td><td>Apoya decisiones de cobertura y planificación.</td></tr>
+        <tr><td>Índice PESTEL</td><td>Indicador compuesto de entorno económico, social, geográfico, político, tecnológico y cultural.</td><td>Resume presión externa en un puntaje comparable.</td></tr>
+      </tbody>
+    </table>
+    """
+
+    desc_html = f"""
+    <section class='desc-box'>
+      <h2>Descripción de Elementos</h2>
+      <h3>Ratios financieros</h3>
+      {desc_ratios}
+      <h3>Factores externos</h3>
+      {desc_externos}
+      <h3>Módulos de análisis y reportes</h3>
+      {desc_analitica}
+    </section>
+    """
 
     charts_html = "".join([f"<section class='chart'><h3>{title}</h3><img src='data:image/png;base64,{img}' /></section>" for title, img in chart_imgs])
 
@@ -621,6 +766,17 @@ def generate_report():
     .chart {{ margin-bottom: 12px; page-break-inside: avoid; }}
     img {{ width: 100%; max-width: 7.8in; height: auto; border: 1px solid #e5e7eb; }}
     .small-note {{ color:#374151; font-size:11px; }}
+    .exec-box, .desc-box {{ border:1px solid #dbeafe; background:#f8fbff; padding:10px; border-radius:8px; }}
+    .one-page {{ border:1px solid #cbd5e1; background:#f8fafc; padding:10px; border-radius:8px; page-break-after: always; }}
+    .kpi-grid {{ display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin:8px 0; }}
+    .kpi {{ border:1px solid #d1d5db; border-radius:6px; padding:8px; background:#fff; }}
+    .kpi-label {{ font-size:11px; color:#475569; }}
+    .kpi-value {{ font-size:16px; font-weight:bold; color:#0f172a; margin-top:4px; }}
+    .badge {{ display:inline-block; border-radius:12px; padding:2px 8px; font-size:10px; font-weight:bold; }}
+    .badge.good {{ background:#dcfce7; color:#166534; }}
+    .badge.warn {{ background:#fef3c7; color:#92400e; }}
+    .badge.bad {{ background:#fee2e2; color:#991b1b; }}
+    .badge.neutral {{ background:#e2e8f0; color:#334155; }}
   </style>
 </head>
 <body>
@@ -628,8 +784,13 @@ def generate_report():
   <p class='small-note'>Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
   <p class='small-note'>Archivo: {os.path.basename(engine.excel_path)}</p>
 
+  {portada_exec_html}
+
   <h2>Resumen Ejecutivo</h2>
   {exec_html}
+
+  <div class='page-break'></div>
+  {desc_html}
 
   <h2>Ratios</h2>
   {ratios}
