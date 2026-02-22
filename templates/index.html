@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard Financiero</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <header class="top">
+      <h1>Dashboard Financiero Web</h1>
+      <div class="row">
+        <input id="excelPath" type="text" />
+        <button id="loadBtn">Cargar</button>
+      </div>
+      <p id="status"></p>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <h2>Ratios</h2>
+        <div class="row">
+          <select id="ratioSelect"></select>
+          <button id="ratioBtn">Actualizar</button>
+        </div>
+        <canvas id="ratioChart"></canvas>
+      </section>
+
+      <section class="card">
+        <h2>Vertical Balance</h2>
+        <div class="row">
+          <select id="yearBalSelect"></select>
+          <button id="balBtn">Ver</button>
+        </div>
+        <canvas id="balChart"></canvas>
+      </section>
+
+      <section class="card">
+        <h2>Vertical E.R.</h2>
+        <div class="row">
+          <select id="yearErSelect"></select>
+          <button id="erBtn">Ver</button>
+        </div>
+        <canvas id="erChart"></canvas>
+      </section>
+
+      <section class="card">
+        <h2>Heatmap (tabla)</h2>
+        <div class="row">
+          <label>Lag:</label>
+          <input id="lag" type="number" min="0" max="2" value="0" />
+          <button id="heatBtn">Generar</button>
+        </div>
+        <div id="heatTable"></div>
+      </section>
+    </main>
+
+    <section class="card full">
+      <h2>Tabla de Ratios</h2>
+      <div id="ratiosTable"></div>
+    </section>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
