@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
+import numpy as np
 
 from core_engine import FinancialEngine
 
@@ -183,7 +184,8 @@ def get_horizontal(report):
     df = st.balance_horizontal if report == "balance" else st.er_horizontal if report == "er" else None
     if df is None:
         return jsonify({"ok": False, "error": "Reporte inválido"}), 400
-    return jsonify({"ok": True, "table": _df_records(df)})
+    rows = _df_records(df)
+    return jsonify({"ok": True, "rows": len(rows), "table": rows})
 
 
 @app.route("/api/panel")
@@ -214,16 +216,20 @@ def get_heatmap():
     if not kpis or not factors:
         return jsonify({"ok": True, "matrix": [], "kpis": [], "factors": []})
     matrix = []
+    n_obs = []
     for k in kpis:
         row = []
+        row_n = []
         for f in factors:
             comp = st.panel[[k, f]].copy()
             if lag:
                 comp[f] = comp[f].shift(lag)
             comp = comp.dropna()
-            row.append(None if comp.empty else float(comp[k].corr(comp[f])))
+            row_n.append(int(len(comp)))
+            row.append(None if len(comp) < 2 else float(comp[k].corr(comp[f])))
         matrix.append(row)
-    return jsonify({"ok": True, "matrix": matrix, "kpis": kpis, "factors": factors})
+        n_obs.append(row_n)
+    return jsonify({"ok": True, "matrix": matrix, "n_obs": n_obs, "kpis": kpis, "factors": factors})
 
 
 @app.route("/api/ols", methods=["POST"])
@@ -252,6 +258,94 @@ def refresh_wdi():
         return jsonify({"ok": True, "external": _df_records(engine.state.external.rename_axis("Año").reset_index()), "panel": _df_records(engine.state.panel.rename_axis("Año").reset_index())})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/external/upsert", methods=["POST"])
+def upsert_external():
+    err = _require_engine()
+    if err:
+        return err
+    payload = request.get_json(silent=True) or {}
+    year = int(payload.get("year"))
+    st = engine.state
+    if year not in st.external.index:
+        st.external.loc[year] = [np.nan] * len(st.external.columns)
+    for col in ["Inflación_%", "PIB_real_%", "USD/DOP", "TPM_%"]:
+        if col in payload and payload[col] not in (None, ""):
+            st.external.loc[year, col] = float(payload[col])
+    years_all = sorted(set(st.panel.index.astype(int).tolist()))
+    st.panel = engine._build_panel(years_all, st.er_wide, st.ratios, st.external.sort_index())
+    return jsonify({"ok": True, "external": _df_records(st.external.rename_axis("Año").reset_index()), "panel": _df_records(st.panel.rename_axis("Año").reset_index())})
+
+
+@app.route("/api/fx-impact", methods=["POST"])
+def fx_impact():
+    err = _require_engine()
+    if err:
+        return err
+    payload = request.get_json(silent=True) or {}
+    st = engine.state
+    kpi = payload.get("kpi", "Ventas")
+    years_ahead = int(payload.get("years_ahead", 3))
+    shock_pct = float(payload.get("shock_pct", 10))
+
+    if kpi not in st.panel.columns:
+        return jsonify({"ok": False, "error": f"KPI inválido: {kpi}"}), 400
+    if "USD/DOP" not in st.panel.columns:
+        return jsonify({"ok": False, "error": "No hay columna USD/DOP en panel"}), 400
+
+    panel = st.panel.copy().sort_index()
+    fx_yoy = panel["USD/DOP"].pct_change(fill_method=None) * 100
+    kpi_yoy = panel[kpi].astype(float).pct_change(fill_method=None) * 100
+    comp = np.vstack([fx_yoy.values, kpi_yoy.values]).T
+    comp = comp[~np.isnan(comp).any(axis=1)]
+    if len(comp) >= 2:
+        beta = float(np.polyfit(comp[:, 0], comp[:, 1], 1)[0])
+    else:
+        beta = -0.25 if kpi in ["Ventas", "Utilidad Neta"] else -0.10
+
+    hist_growth = kpi_yoy.replace([np.inf, -np.inf], np.nan).dropna()
+    base_growth = float(hist_growth.mean()) if not hist_growth.empty else 3.0
+    last_year = int(panel.index.max())
+    last_val = float(panel.loc[last_year, kpi])
+
+    labels = [str(y) for y in panel.index.tolist()]
+    baseline_hist = [None if x != x else float(x) for x in panel[kpi].tolist()]
+
+    proj_years = [last_year + i for i in range(1, years_ahead + 1)]
+    labels += [str(y) for y in proj_years]
+    base_vals = []
+    stress_vals = []
+    opt_vals = []
+    v_base = last_val
+    v_stress = last_val
+    v_opt = last_val
+
+    stress_adj = beta * abs(shock_pct)
+    opt_adj = -beta * abs(shock_pct)
+    for _ in proj_years:
+        v_base *= 1 + base_growth / 100.0
+        v_stress *= 1 + (base_growth + stress_adj) / 100.0
+        v_opt *= 1 + (base_growth + opt_adj) / 100.0
+        base_vals.append(float(v_base))
+        stress_vals.append(float(v_stress))
+        opt_vals.append(float(v_opt))
+
+    return jsonify(
+        {
+            "ok": True,
+            "labels": labels,
+            "historico": baseline_hist + [None] * len(proj_years),
+            "base": [None] * len(panel.index) + base_vals,
+            "estres": [None] * len(panel.index) + stress_vals,
+            "optimista": [None] * len(panel.index) + opt_vals,
+            "meta": {
+                "elasticidad_fx": round(beta, 4),
+                "crecimiento_base_pct": round(base_growth, 2),
+                "shock_pct": shock_pct,
+            },
+        }
+    )
 
 
 @app.route("/api/report", methods=["POST"])

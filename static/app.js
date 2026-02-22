@@ -11,6 +11,7 @@ let ratioChart;
 let balChart;
 let erChart;
 let pestelChart;
+let fxChart;
 
 function setStatus(msg, isError = false) {
   statusEl.textContent = msg;
@@ -75,6 +76,8 @@ async function loadAll() {
   yearBalSelect.innerHTML = data.bal_years.map((x) => `<option value="${x}">${x}</option>`).join("");
   yearErSelect.innerHTML = data.er_years.map((x) => `<option value="${x}">${x}</option>`).join("");
   document.getElementById("pestelYear").innerHTML = (data.panel_years || []).map((x) => `<option value="${x}">${x}</option>`).join("");
+  const fxKpis = ["Ventas", "Utilidad Neta", ...(data.kpis || [])];
+  document.getElementById("fxKpi").innerHTML = fxKpis.map((x) => `<option value="${x}">${x}</option>`).join("");
 
   await refreshRatiosTable();
   await refreshRatio();
@@ -123,20 +126,31 @@ async function refreshHeatmap() {
   }
   if (!data.matrix || data.matrix.length === 0) {
     document.getElementById("heatTable").innerHTML = "<p>Sin datos</p>";
+    document.getElementById("heatNote").textContent = "No hay datos suficientes para calcular correlaciones.";
     return;
   }
   const rows = data.kpis.map((k, i) => {
-    const cols = data.matrix[i].map((x) => `<td>${x === null ? "" : Number(x).toFixed(3)}</td>`).join("");
+    const cols = data.matrix[i]
+      .map((x, j) => {
+        const n = data.n_obs && data.n_obs[i] ? data.n_obs[i][j] : null;
+        return `<td>${x === null ? `N/D${n !== null ? ` (n=${n})` : ""}` : Number(x).toFixed(3)}</td>`;
+      })
+      .join("");
     return `<tr><th>${k}</th>${cols}</tr>`;
   });
   const head = `<tr><th>KPI \\ Factor</th>${data.factors.map((f) => `<th>${f}</th>`).join("")}</tr>`;
   document.getElementById("heatTable").innerHTML = `<table><thead>${head}</thead><tbody>${rows.join("")}</tbody></table>`;
+  document.getElementById("heatNote").textContent = "Si aparecen N/D, faltan observaciones históricas (usa Lag=0 y carga factores externos).";
 }
 
 async function refreshHorizontal(report) {
   const data = await apiGet(`/api/horizontal/${report}`);
   const target = report === "balance" ? "horizontalBalanceTable" : "horizontalErTable";
-  document.getElementById(target).innerHTML = data.ok ? tableFromRecords(data.table) : `<p>${data.error || "Error horizontal"}</p>`;
+  if (!data.ok) {
+    document.getElementById(target).innerHTML = `<p>${data.error || "Error horizontal"}</p>`;
+    return;
+  }
+  document.getElementById(target).innerHTML = (data.rows || 0) > 0 ? tableFromRecords(data.table) : "<p>Sin filas para mostrar.</p>";
 }
 
 async function refreshExternal() {
@@ -152,6 +166,27 @@ async function updateWdi() {
     return;
   }
   setStatus(`WDI actualizado para ${country}`);
+  document.getElementById("externalTable").innerHTML = tableFromRecords(data.external || []);
+}
+
+async function saveExternalManual() {
+  const payload = {
+    year: Number(document.getElementById("extYear").value),
+    "USD/DOP": document.getElementById("extFx").value,
+    "Inflación_%": document.getElementById("extInf").value,
+    "PIB_real_%": document.getElementById("extGdp").value,
+    "TPM_%": document.getElementById("extTpm").value,
+  };
+  if (!payload.year) {
+    setStatus("Indica el año para guardar dato externo.", true);
+    return;
+  }
+  const data = await apiPost("/api/external/upsert", payload);
+  if (!data.ok) {
+    setStatus(data.error || "Error guardando dato externo", true);
+    return;
+  }
+  setStatus("Dato externo guardado.");
   document.getElementById("externalTable").innerHTML = tableFromRecords(data.external || []);
 }
 
@@ -230,6 +265,39 @@ async function calcPestel() {
   );
 }
 
+function renderFxChart(labels, historico, base, estres, optimista) {
+  if (fxChart.chart) fxChart.chart.destroy();
+  fxChart.chart = new Chart(fxChart.ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: "Histórico", data: historico, borderColor: "#1d4ed8", backgroundColor: "transparent" },
+        { label: "Base", data: base, borderColor: "#0f766e", borderDash: [4, 4], backgroundColor: "transparent" },
+        { label: "Estrés (depreciación)", data: estres, borderColor: "#dc2626", borderDash: [6, 4], backgroundColor: "transparent" },
+        { label: "Optimista", data: optimista, borderColor: "#16a34a", borderDash: [6, 4], backgroundColor: "transparent" },
+      ],
+    },
+    options: { responsive: true, spanGaps: true },
+  });
+}
+
+async function runFxImpact() {
+  const payload = {
+    kpi: document.getElementById("fxKpi").value,
+    shock_pct: Number(document.getElementById("fxShock").value || 10),
+    years_ahead: Number(document.getElementById("fxYears").value || 3),
+  };
+  const data = await apiPost("/api/fx-impact", payload);
+  if (!data.ok) {
+    setStatus(data.error || "Error en escenarios FX", true);
+    return;
+  }
+  renderFxChart(data.labels, data.historico, data.base, data.estres, data.optimista);
+  const m = data.meta || {};
+  document.getElementById("fxMeta").textContent = `Elasticidad estimada: ${m.elasticidad_fx} | Crecimiento base: ${m.crecimiento_base_pct}% | Shock: ${m.shock_pct}%`;
+}
+
 async function generateReport() {
   const data = await apiPost("/api/report", {});
   if (!data.ok) {
@@ -246,6 +314,7 @@ window.addEventListener("DOMContentLoaded", () => {
   balChart = { ctx: document.getElementById("balChart").getContext("2d"), chart: null };
   erChart = { ctx: document.getElementById("erChart").getContext("2d"), chart: null };
   pestelChart = { ctx: document.getElementById("pestelChart").getContext("2d"), chart: null };
+  fxChart = { ctx: document.getElementById("fxChart").getContext("2d"), chart: null };
 
   document.getElementById("loadBtn").addEventListener("click", loadAll);
   document.getElementById("uploadBtn").addEventListener("click", uploadExcel);
@@ -256,5 +325,7 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("erBtn").addEventListener("click", () => refreshVertical("er"));
   document.getElementById("heatBtn").addEventListener("click", refreshHeatmap);
   document.getElementById("wdiBtn").addEventListener("click", updateWdi);
+  document.getElementById("saveExternalBtn").addEventListener("click", saveExternalManual);
   document.getElementById("pestelBtn").addEventListener("click", calcPestel);
+  document.getElementById("fxBtn").addEventListener("click", runFxImpact);
 });

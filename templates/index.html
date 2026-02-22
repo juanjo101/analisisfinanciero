@@ -59,6 +59,7 @@
           <button id="heatBtn">Generar</button>
         </div>
         <div id="heatTable"></div>
+        <p id="heatNote" class="hint"></p>
       </section>
 
       <section class="card">
@@ -79,6 +80,14 @@
           <button id="wdiBtn">Actualizar WDI</button>
         </div>
         <p class="hint">Incluye Inflación, PIB real y <strong>USD/DOP</strong> (tasa del dólar).</p>
+        <div class="row wrap">
+          <input id="extYear" type="number" placeholder="Año" class="short" />
+          <input id="extFx" type="number" step="0.0001" placeholder="USD/DOP" class="short" />
+          <input id="extInf" type="number" step="0.01" placeholder="Inflación %" class="short" />
+          <input id="extGdp" type="number" step="0.01" placeholder="PIB real %" class="short" />
+          <input id="extTpm" type="number" step="0.01" placeholder="TPM %" class="short" />
+          <button id="saveExternalBtn">Guardar dato manual</button>
+        </div>
         <div id="externalTable" class="table-wrap"></div>
       </section>
 
@@ -109,6 +118,21 @@
         <p id="pestelStatus"></p>
         <canvas id="pestelChart"></canvas>
         <div id="pestelTable" class="table-wrap"></div>
+      </section>
+
+      <section class="card">
+        <h2>Impacto Tasa de Cambio (Escenarios)</h2>
+        <div class="row wrap">
+          <label>KPI:</label>
+          <select id="fxKpi" class="short"></select>
+          <label>Shock USD/DOP %:</label>
+          <input id="fxShock" type="number" value="10" class="short" />
+          <label>Años proyección:</label>
+          <input id="fxYears" type="number" value="3" min="1" max="10" class="short" />
+          <button id="fxBtn">Correr escenarios</button>
+        </div>
+        <p id="fxMeta" class="hint"></p>
+        <canvas id="fxChart"></canvas>
       </section>
     </main>
 
