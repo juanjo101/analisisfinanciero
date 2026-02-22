@@ -1,0 +1,10 @@
+pandas
+numpy
+matplotlib
+gradio
+plotly
+openpyxl
+statsmodels
+reportlab<4
+requests<2.32
+urllib3<2

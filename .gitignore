@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local envs
+.venv/
+venv/
+.env
+
+# macOS
+.DS_Store
+
+# Project outputs
+outputs/
+
+# Data files (optional/local)
+*.xlsx
+*.xls
+*.csv
+*.pdf
+*.png
