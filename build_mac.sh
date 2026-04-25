@@ -8,7 +8,7 @@ PYINSTALLER="python3 -m PyInstaller"
 
 echo "Iniciando compilación para Mac..."
 
-$PYINSTALLER --noconfirm --windowed --name "AnalisisFinanciero" \
+$PYINSTALLER --noconfirm --onefile --windowed --name "AnalisisFinanciero" \
     --add-data "templates:templates" \
     --add-data "static:static" \
     --add-data "PlantillaBC_2Grupo No. 1.xlsx:." \
