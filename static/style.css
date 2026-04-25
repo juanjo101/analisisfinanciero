@@ -102,6 +102,14 @@ button:hover {
   background: #c2410c;
 }
 
+.btn-demo button {
+  background: #db2777; /* Rosa para el demo */
+}
+
+.btn-demo button:hover {
+  background: #be185d;
+}
+
 .grid {
   padding: 16px;
   display: grid;

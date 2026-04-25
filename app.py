@@ -132,6 +132,11 @@ def cliente_form():
     return render_template("cliente_form.html")
 
 
+@app.route("/demo")
+def demo_form():
+    return render_template("cliente_form_demo.html")
+
+
 @app.route("/outputs/<path:filename>")
 def outputs_file(filename):
     return send_from_directory(OUTPUT_DIR, filename)
