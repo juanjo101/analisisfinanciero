@@ -31,9 +31,27 @@ def _to_number(x):
 
 
 def parse_multi_year_sheet(path: str, sheet_name: str, account_col: str = None, year_cols: List[str] = None) -> Tuple[pd.DataFrame, List[str]]:
-    # Formato normalizado: columnas con encabezado y años en nombres de columna.
+    # Primero cargamos sin header para detectar dónde empieza la tabla
+    df_raw = pd.read_excel(path, sheet_name=sheet_name, header=None)
+    header_idx = 0
+    
+    # Buscar una fila que contenga palabras clave de cuenta o años
+    for i in range(min(20, len(df_raw))):
+        row = [str(x).upper() for x in df_raw.iloc[i] if not pd.isna(x)]
+        if any(kw in row for kw in ["CUENTA", "CONCEPTO", "CONCEPTOS", "FECHA"]):
+            header_idx = i
+            break
+        # También buscar si hay años en la fila
+        for val in row:
+            try:
+                if 2000 <= int(float(val)) <= 2100:
+                    header_idx = i
+                    break
+            except: continue
+    
+    # Recargar con el header detectado
     try:
-        dfh = pd.read_excel(path, sheet_name=sheet_name)
+        dfh = pd.read_excel(path, sheet_name=sheet_name, header=header_idx)
         if not dfh.empty:
             cols = list(dfh.columns)
 
@@ -238,8 +256,12 @@ class FinancialEngine:
             er = 0
             if "FINANCIERA" in u or "BALANCE" in u:
                 bal += 3
+            if "ESTRUCTURA FINANCIERA" in u:
+                bal += 5
             if "ECONOMICA" in u or "RESULTADOS" in u or "RESULTADO" in u:
                 er += 3
+            if "ESTRUCTURA ECONOMICA" in u:
+                er += 5
             if "ESTRUCTURA" in u:
                 bal += 1
                 er += 1
@@ -271,8 +293,23 @@ class FinancialEngine:
 
     @staticmethod
     def profile_sheet(excel_path: str, sheet_name: str):
-        df = pd.read_excel(excel_path, sheet_name=sheet_name)
-        cols = list(df.columns)
+        # Primero detectamos el header real
+        df_raw = pd.read_excel(excel_path, sheet_name=sheet_name, header=None)
+        h_idx = 0
+        for i in range(min(20, len(df_raw))):
+            row = [str(x).upper() for x in df_raw.iloc[i] if not pd.isna(x)]
+            if any(kw in row for kw in ["CUENTA", "CONCEPTO", "CONCEPTOS", "FECHA"]):
+                h_idx = i
+                break
+            for val in row:
+                try:
+                    if 2000 <= int(float(val)) <= 2100:
+                        h_idx = i
+                        break
+                except: continue
+
+        df = pd.read_excel(excel_path, sheet_name=sheet_name, header=h_idx)
+        cols = [str(c) for c in df.columns]
 
         def _year_col(c):
             cs = str(c).strip()
