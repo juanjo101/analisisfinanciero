@@ -82,6 +82,26 @@ button:hover {
   background: #047857;
 }
 
+.btn-client, .btn-client-dl {
+  text-decoration: none;
+}
+
+.btn-client button {
+  background: #7c3aed; /* Violeta para el cliente */
+}
+
+.btn-client button:hover {
+  background: #6d28d9;
+}
+
+.btn-client-dl button {
+  background: #ea580c; /* Naranja para descarga de HTML */
+}
+
+.btn-client-dl button:hover {
+  background: #c2410c;
+}
+
 .grid {
   padding: 16px;
   display: grid;

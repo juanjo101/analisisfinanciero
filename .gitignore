@@ -20,6 +20,7 @@ outputs/
 # Data files (optional/local)
 *.xlsx
 !static/plantilla_financiera.xlsx
+!static/formulario_cliente.html
 *.xls
 *.csv
 *.pdf

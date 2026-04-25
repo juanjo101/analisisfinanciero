@@ -127,6 +127,11 @@ def home():
     return render_template("index.html", asset_v=asset_v)
 
 
+@app.route("/cliente")
+def cliente_form():
+    return render_template("cliente_form.html")
+
+
 @app.route("/outputs/<path:filename>")
 def outputs_file(filename):
     return send_from_directory(OUTPUT_DIR, filename)

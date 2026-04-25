@@ -17,6 +17,12 @@
         <a href="{{ url_for('static', filename='plantilla_financiera.xlsx') }}" download class="btn-download">
           <button type="button">Descargar Plantilla</button>
         </a>
+        <a href="/cliente" target="_blank" class="btn-client">
+          <button type="button">Abrir Formulario Cliente</button>
+        </a>
+        <a href="{{ url_for('static', filename='formulario_cliente.html') }}" download class="btn-client-dl">
+          <button type="button">Descargar HTML Formulario</button>
+        </a>
         <button id="discoverBtn">Detectar hojas</button>
         <select id="balanceSheet"></select>
         <select id="erSheet"></select>
