@@ -19,7 +19,14 @@ outputs/
 
 # Data files (optional/local)
 *.xlsx
+!static/plantilla_financiera.xlsx
 *.xls
 *.csv
 *.pdf
 *.png
+
+# PyInstaller
+build/
+dist/
+*.spec
+
