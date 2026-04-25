@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Formulario financiero simple - Generador Excel</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--azul:#1f4e79;--azul2:#2f75b5;--verde:#70ad47;--gris:#f4f7fb;--borde:#d9e2ec;--texto:#1f2937;--rojo:#c00000;--amarillo:#fff2cc}
+*{box-sizing:border-box} body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#eef3f8;color:var(--texto)}
+header{background:linear-gradient(135deg,var(--azul),#12324e);color:white;padding:28px 22px} header h1{margin:0 0 8px;font-size:26px} header p{margin:0;opacity:.9;max-width:980px}
+main{max-width:1180px;margin:22px auto;padding:0 16px 40px}.card{background:white;border:1px solid var(--borde);border-radius:14px;box-shadow:0 8px 24px rgba(31,78,121,.08);margin-bottom:18px;overflow:hidden}.card h2{font-size:18px;margin:0;padding:16px 18px;background:#f8fbff;border-bottom:1px solid var(--borde);color:var(--azul)}.body{padding:18px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:13px;font-weight:600}.field small{font-weight:400;color:#667085}.field input,.field select,.field textarea{border:1px solid #cbd5e1;border-radius:9px;padding:10px;font-size:14px;background:white}.field textarea{min-height:72px}.years{display:grid;grid-template-columns:240px repeat(3,1fr);gap:8px;align-items:center}.years .head{font-weight:700;background:#eaf3fb;color:var(--azul);padding:10px;border-radius:8px;text-align:center}.rowlabel{font-weight:600;font-size:13px;padding:10px 8px}.money{width:100%;text-align:right}.section-title{grid-column:1/-1;margin:16px 0 4px;padding:10px 12px;background:#eef6ee;border-left:5px solid var(--verde);font-weight:700;color:#315b24;border-radius:8px}.hint{background:#fff8e5;border:1px solid #f7df9e;padding:12px;border-radius:10px;margin:0 0 14px;font-size:14px}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.btn{border:0;border-radius:10px;padding:12px 16px;font-weight:700;cursor:pointer;font-size:14px}.primary{background:var(--azul2);color:white}.secondary{background:#e6eef7;color:var(--azul)}.danger{background:#ffe4e6;color:#9f1239}.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.kpi div{background:#f8fbff;border:1px solid var(--borde);border-radius:12px;padding:14px}.kpi span{display:block;font-size:12px;color:#667085}.kpi strong{font-size:20px;color:var(--azul)}.warn{color:var(--rojo);font-weight:700}.ok{color:var(--verde);font-weight:700}.footer{font-size:12px;color:#667085;text-align:center;margin-top:18px}@media(max-width:850px){.grid,.grid2,.kpi{grid-template-columns:1fr}.years{grid-template-columns:1fr}.years .head{text-align:left}.rowlabel{background:#f8fbff;border-radius:8px}}
+</style>
+</head>
+<body>
+<header>
+<h1>Formulario financiero simple para clientes</h1>
+<p>Complete los datos de forma sencilla. Al finalizar, presione “Generar Excel” para descargar un archivo con las hojas “ESTRUCTURA FINANCIERA” y “ESTRUCTURA ECONOMICA”, alineadas con la plantilla de análisis.</p>
+</header>
+<main>
+<form id="form">
+<section class="card"><h2>1. Datos generales</h2><div class="body grid">
+<div class="field"><label>Nombre del negocio o empresa</label><input id="empresa" required placeholder="Ej.: Comercial Pérez SRL"></div>
+<div class="field"><label>Persona que llena el formulario</label><input id="contacto" placeholder="Nombre y apellido"></div>
+<div class="field"><label>Moneda</label><select id="moneda"><option>DOP</option><option>USD</option></select></div>
+<div class="field"><label>Año más reciente</label><input id="y1" type="number" value="2025"></div>
+<div class="field"><label>Año anterior</label><input id="y2" type="number" value="2024"></div>
+<div class="field"><label>Hace dos años</label><input id="y3" type="number" value="2023"></div>
+</div></section>
+<section class="card"><h2>2. Balance general explicado en lenguaje simple</h2><div class="body">
+<p class="hint">Indique cuánto tenía el negocio al cierre de cada año. Si no aplica o no conoce el dato, puede dejarlo en cero.</p>
+<div class="years" id="balanceRows"></div>
+</div></section>
+<section class="card"><h2>3. Estado de resultados explicado en lenguaje simple</h2><div class="body">
+<p class="hint">Indique cuánto vendió, cuánto gastó y cuánto ganó el negocio durante cada año completo.</p>
+<div class="field" style="margin-bottom:12px"><label>Tipo de información</label><select id="ciclo"><option>Anual</option><option>Mensual</option></select></div>
+<div class="years" id="incomeRows"></div>
+</div></section>
+<section class="card"><h2>4. Resumen y descarga</h2><div class="body">
+<div class="kpi" id="kpis"></div>
+<div class="actions">
+<button type="button" class="btn primary" onclick="generarExcel()">Generar Excel</button>
+<button type="button" class="btn secondary" onclick="guardar()">Guardar en este navegador</button>
+<button type="button" class="btn secondary" onclick="cargar()">Cargar datos guardados</button>
+<button type="button" class="btn danger" onclick="limpiar()">Limpiar formulario</button>
+</div>
+<p class="footer">El Excel generado contiene una hoja adicional llamada “RESPUESTAS_CLIENTE” para trazabilidad de los datos suministrados.</p>
+</div></section>
+</form>
+</main>
+<script>
+const balance = [
+['section','Dinero y cuentas por cobrar'],
+['cash','Dinero en caja y bancos','EFECTIVO EN CAJA Y BANCOS'],
+['tempInv','Inversiones temporales o certificados de corto plazo','INVERS. FINANCIERAS TEMPORALES'],
+['ar','Dinero que clientes le deben al negocio','CUENTAS POR COBRAR COMERCIALES NETAS'],
+['derivatives','Contratos o derivados financieros, si aplica','DERIVADOS Y CONTRATOS DE COMPRA VENTA'],
+['groupAr','Dinero que empresas relacionadas le deben','CUENTAS POR COBRAR GRUPO'],
+['recovered','Bienes recibidos por recuperación o dación de pago','BIENES RECIBIDOS EN RECUPERACION'],
+['prepaid','Pagos adelantados: seguros, alquileres, anticipos','PREPAGADOS'],
+['section','Bienes de largo plazo'],
+['land','Terrenos del negocio','TERRENOS'],
+['buildings','Edificios, locales o instalaciones','EDIFICIOS E INSTALACIONES'],
+['machinery','Maquinarias y equipos','MAQUINARIAS Y EQUIPOS'],
+['otherFixed','Otros activos fijos materiales','OTROS ACTIVOS FIJOS MATERIALES'],
+['depr','Depreciación acumulada, si la conoce','AMORTIZACION (DEP.) ACUMULADA.'],
+['intang','Activos intangibles: software, marcas, licencias','ACTIVO INTANGIBLE NETO'],
+['financialLP','Inversiones financieras de largo plazo','ACTIVO FINANCIERO A L.P.'],
+['loansGroupLP','Préstamos otorgados a empresas relacionadas a largo plazo','PRESTAMOS AL GRUPO A L.P.'],
+['deferredLP','Cargos diferidos de largo plazo','CARGOS DIFERIDOS A L.P.'],
+['otherAssetsLP','Otros activos de largo plazo','OTROS ACTIVOS A L.P.'],
+['section','Deudas y compromisos'],
+['bankCP','Préstamos bancarios o financiamientos de corto plazo','BANCOS A CORTO PLAZO (Deposito al Publico)'],
+['depositsFin','Depósitos o deudas con entidades financieras','DEPOSITOS A ENTIDADES FINANCIERAS'],
+['borrowedFunds','Fondos tomados a préstamo','FONDOS TOMADOS A PRESTAMOS'],
+['groupPayCP','Cuentas por pagar a empresas relacionadas a corto plazo','CTAS A PAGAR AL GRUPO C.P.'],
+['advClients','Anticipos recibidos de clientes','ANTICIPOS DE CLIENTES'],
+['taxCP','Impuestos y compromisos con la administración pública a corto plazo','ADMON. PUBLICA A C.P./IMPTOS.'],
+['deferredCreditCP','Créditos diferidos de corto plazo','CREDITOS DIFERIDOS A C.P.'],
+['otherLiabCP','Otras deudas de corto plazo','OTROS PASIVOS CORRIENTES'],
+['otherLiabLP1','Otros pasivos de largo plazo','OTROS PASIVOS A L.P.'],
+['capitalObl','Obligaciones similares de capital','OBLIGACIONES ASIMILARES DE CAPITAL'],
+['payLP','Cuentas por pagar de largo plazo','CTAS. POR PAGAR A L.P.'],
+['bankLP','Préstamos bancarios de largo plazo','BANCOS A LP.'],
+['otherDebtLP','Otras deudas financieras de largo plazo','OTRAS DEUDAS FINANC, A LP.'],
+['divPay','Dividendos por pagar','DIVIDENDOS POR PAGAR'],
+['taxLP','Impuestos o compromisos públicos de largo plazo','ADMON. PUBLICA A L.P.'],
+['otherLiabLP2','Otros pasivos a largo plazo adicionales','OTROS PASIVOS A L.P.'],
+['section','Capital del dueño o socios'],
+['capital','Capital aportado por socios o dueños','CAPITAL SOCIAL SUSCRITO'],
+['capitalUnpaid','Capital pendiente de pago','CAPITAL NO PAGADO'],
+['reserves','Reservas acumuladas','RESERVAS'],
+['retained','Ganancias acumuladas no distribuidas','UTILIDADES NO DISTRIBUIDAS'],
+['reval','Superávit por revalorización de inversiones','SUPERAVIT POR REVALORIZACION INVERSIONES'],
+['minority','Intereses minoritarios, si aplica','INTERESES MINORITARIOS'],
+['conting','Cuentas de orden o contingencias','TOTAL CONTINGENCIAS-CTAS DE ORDEN']
+];
+const income = [
+['revenue','Ventas o ingresos totales del año','. = INGRESOS TOTALES'],
+['otherOp','Otros ingresos operacionales','.+ OTROS INGRESOS OPERACIONALES'],
+['financialExpensesConsumption','Gastos financieros o consumos financieros','CONSUMOS(GASTOS FINANCIEROS)'],
+['fairValue','Resultado neto de activos financieros a valor razonable','RESULTADOS NETO DE ACTIVOS FINANCIEROS A VALOR RAZONABLE'],
+['otherExp','Otros gastos','OTROS GASTOS'],
+['cogs','Costo de ventas o costo directo de mercancía/servicio','.- COSTO DE VENTAS'],
+['staff','Gastos de personal o nómina','.- GASTOS DE PERSONAL'],
+['depAmort','Depreciación y amortización del año','.- AMORTIZACION Y DEPRECIACION'],
+['provisions','Provisiones del circulante','.- PROVISIONES DEL CIRCULANTE'],
+['operatingOther','Otros gastos operativos','.- OTROS GASTOS OPERATIVOS'],
+['finIncome','Ingresos financieros','INGRESOS FINANCIEROS'],
+['finExpense','Egresos financieros','EGRESOS FINANCIEROS'],
+['fx','Resultado en moneda extranjera','RESULTADO EN MONEDA EXT.'],
+['monetary','Resultado monetario','RESULTADO MONETARIO'],
+['extraordinary','Resultados extraordinarios','.+/- RESULTADOS EXTRAORDINARIOS'],
+['taxes','Impuestos pagados o causados','.- IMPUESTOS'],
+['dividends','Dividendos','DIVIDENDOS'],
+['minorityResult','Intereses minoritarios','INTERESES MINORITARIOS'],
+['reservesResult','Reservas','RESERVAS']
+];
+function v(id){return document.getElementById(id).value}
+function n(id){return Number(String(v(id)||'0').replace(/,/g,''))||0}
+function money(x){return Number(x||0).toLocaleString('es-DO',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function buildRows(){
+ let b=document.getElementById('balanceRows'); b.innerHTML='<div></div><div class="head">Año reciente</div><div class="head">Año anterior</div><div class="head">Hace dos años</div>';
+ balance.forEach(r=>{ if(r[0]==='section'){b.innerHTML+=`<div class="section-title">${r[1]}</div>`} else {b.innerHTML+=`<div class="rowlabel">${r[1]}<br><small>${r[2]}</small></div><input class="money" type="number" step="0.01" id="b_${r[0]}_1" oninput="actualizarKPIs()"><input class="money" type="number" step="0.01" id="b_${r[0]}_2" oninput="actualizarKPIs()"><input class="money" type="number" step="0.01" id="b_${r[0]}_3" oninput="actualizarKPIs()">`}});
+ let i=document.getElementById('incomeRows'); i.innerHTML='<div></div><div class="head">Año reciente</div><div class="head">Año anterior</div><div class="head">Hace dos años</div>';
+ income.forEach(r=>{i.innerHTML+=`<div class="rowlabel">${r[1]}<br><small>${r[2]}</small></div><input class="money" type="number" step="0.01" id="i_${r[0]}_1" oninput="actualizarKPIs()"><input class="money" type="number" step="0.01" id="i_${r[0]}_2" oninput="actualizarKPIs()"><input class="money" type="number" step="0.01" id="i_${r[0]}_3" oninput="actualizarKPIs()">`});
+ actualizarKPIs();
+}
+function sumB(keys,yr){return keys.reduce((a,k)=>a+n(`b_${k}_${yr}`),0)}
+function sumI(keys,yr){return keys.reduce((a,k)=>a+n(`i_${k}_${yr}`),0)}
+function totals(yr){
+ const current=sumB(['cash','tempInv','ar','derivatives','groupAr','recovered','prepaid'],yr);
+ const fixed=sumB(['land','buildings','machinery','otherFixed'],yr)-n(`b_depr_${yr}`);
+ const longAssets=sumB(['intang','financialLP','loansGroupLP','deferredLP','otherAssetsLP'],yr);
+ const assets=current+fixed+longAssets;
+ const currentLiab=sumB(['bankCP','depositsFin','borrowedFunds','groupPayCP','advClients','taxCP','deferredCreditCP','otherLiabCP'],yr);
+ const longLiab=sumB(['otherLiabLP1','capitalObl','payLP','bankLP','otherDebtLP','divPay','taxLP','otherLiabLP2'],yr);
+ const liabilities=currentLiab+longLiab;
+ const equity=n(`b_capital_${yr}`)-n(`b_capitalUnpaid_${yr}`)+sumB(['reserves','retained','reval','minority'],yr);
+ const revenue=n(`i_revenue_${yr}`), gross=revenue-n(`i_cogs_${yr}`), op=gross+n(`i_otherOp_${yr}`)-sumI(['staff','depAmort','provisions','operatingOther'],yr), ordinary=op+sumI(['finIncome','fx','monetary','fairValue'],yr)-sumI(['finExpense','financialExpensesConsumption','otherExp'],yr), beforeTax=ordinary+n(`i_extraordinary_${yr}`), net=beforeTax-n(`i_taxes_${yr}`);
+ return {current,fixed,longAssets,assets,currentLiab,longLiab,liabilities,equity,revenue,gross,op,ordinary,beforeTax,net};
+}
+function actualizarKPIs(){
+ const t=totals(1), diff=t.assets-t.liabilities-t.equity;
+ document.getElementById('kpis').innerHTML=`<div><span>Total activos recientes</span><strong>${money(t.assets)}</strong></div><div><span>Total pasivos recientes</span><strong>${money(t.liabilities)}</strong></div><div><span>Patrimonio reciente</span><strong>${money(t.equity)}</strong></div><div><span>Validación balance</span><strong class="${Math.abs(diff)<1?'ok':'warn'}">${money(diff)}</strong></div>`;
+}
+function sheetEstructuraFinanciera(){
+ const y=[v('y1'),v('y2'),v('y3')], A=[];
+ for(let r=0;r<62;r++) A.push(Array(7).fill(''));
+ A[0][0]='Carga de datos del del Balance General';A[2][0]='ESTRUCTURA FINANCIERA';A[4][0]='BALANCE GENERAL';A[5][0]=`(Expresado en pesos ${v('moneda')})`;A[7]=['CONCEPTOS','FECHA','%','FECHA','%','FECHA','%'];A[8]=['',y[0],'',y[1],'',y[2],''];
+ const map={cash:10,tempInv:11,ar:12,derivatives:13,groupAr:14,recovered:15,prepaid:16,land:18,buildings:19,machinery:20,otherFixed:21,depr:22,intang:24,financialLP:25,loansGroupLP:26,deferredLP:27,otherAssetsLP:28,bankCP:31,depositsFin:32,borrowedFunds:33,groupPayCP:34,advClients:35,taxCP:36,deferredCreditCP:37,otherLiabCP:38,otherLiabLP1:40,capitalObl:41,payLP:42,bankLP:43,otherDebtLP:44,divPay:45,taxLP:46,otherLiabLP2:47,capital:50,capitalUnpaid:51,reserves:53,retained:54,reval:55,minority:57,conting:59};
+ balance.filter(x=>x[0]!=='section').forEach(x=>{let rr=map[x[0]]-1;A[rr][0]=x[2];[1,2,3].forEach((yr,idx)=>A[rr][idx*2+1]=n(`b_${x[0]}_${yr}`));});
+ [['ACTIVO CIRCULANTE',17],['ACTIVOS FIJOS MATERIALES NETOS',23],['INMOVILIZADO NETO',29],['TOTAL ACTIVOS',30],['PASIVO CIRCULANTE',39],['PASIVO A LARGO PLAZO',48],['TOTAL PASIVO',49],['CAPITAL SOCIAL NETO',52],['RECURSOS PROPIOS (PATRIMONIO)',56]].forEach(x=>A[x[1]-1][0]=x[0]);
+ [1,2,3].forEach((yr,idx)=>{let c=idx*2+1,t=totals(yr);A[16][c]=t.current;A[22][c]=t.fixed;A[28][c]=t.fixed+t.longAssets;A[29][c]=t.assets;A[38][c]=t.currentLiab;A[47][c]=t.longLiab;A[48][c]=t.liabilities;A[51][c]=n(`b_capital_${yr}`)-n(`b_capitalUnpaid_${yr}`);A[55][c]=t.equity;A[59][c]=Math.abs(t.assets-t.liabilities-t.equity)<1?'BALANCE CUADRA':'REVISAR BALANCE';A[60][c]=t.assets-t.liabilities-t.equity;for(let r=9;r<59;r++){A[r][c+1]=t.assets?A[r][c]/t.assets:0}});
+ return A;
+}
+function sheetEstructuraEconomica(){
+ const y=[v('y1'),v('y2'),v('y3')], A=[]; for(let r=0;r<39;r++) A.push(Array(8).fill(''));
+ A[0][0]='Carga de datos del estado de Ganancias y pérdidas';A[2][0]='Seleccionar el ciclo temporal de análisis, si es información mesual o anual';A[2][1]=v('ciclo');A[3][0]='ESTRUCTURA ECONOMICA';A[5][0]='ESTADO DE GANANCIAS Y PERDIDAS';A[6][0]=`(Expresado en pesos ${v('moneda')})`;A[7]=['CONCEPTOS',y[0],'%','VAR. %',y[1],'% ',y[2],'%'];
+ const rows={revenue:10,otherOp:11,financialExpensesConsumption:12,fairValue:13,otherExp:14,cogs:15,staff:17,depAmort:18,provisions:19,operatingOther:20,finIncome:22,finExpense:23,fx:24,monetary:25,extraordinary:28,taxes:30,dividends:32,minorityResult:33,reservesResult:34};
+ income.forEach(x=>{let rr=rows[x[0]]-1;A[rr][0]=x[2];[1,2,3].forEach((yr,idx)=>A[rr][idx===0?1:idx===1?4:6]=n(`i_${x[0]}_${yr}`));});
+ [['. = UTILIDAD BRUTA EN VENTAS',16],['. = UTILIDAD NETA EN OPERACIONES',21],['.+/- COSTO INTEGRAL DE FINANCIAMIENTO',26],['. = RESULTADO ACTIVIDADES ORDINARIAS',27],['.= BENEFICIO ANTES DE IMPTOS.',29],['.= BENEFICIO NETO',31]].forEach(x=>A[x[1]-1][0]=x[0]);
+ [1,2,3].forEach((yr,idx)=>{let c=idx===1?4:idx===2?6:1,t=totals(yr);A[15][c]=t.gross;A[20][c]=t.op;A[25][c]=t.ordinary-t.op;A[26][c]=t.ordinary;A[28][c]=t.beforeTax;A[30][c]=t.net;for(let r=9;r<34;r++){A[r][c+1]=t.revenue?A[r][c]/t.revenue:0}});
+ for(let r=9;r<34;r++){A[r][3]=A[r][4]?((A[r][1]-A[r][4])/A[r][4]):0}
+ return A;
+}
+function generarExcel(){
+ if(typeof XLSX==='undefined'){alert('No se pudo cargar la librería para generar Excel. Verifique conexión a internet y vuelva a intentar.');return}
+ const wb=XLSX.utils.book_new();
+ let ws1=XLSX.utils.aoa_to_sheet(sheetEstructuraFinanciera()); let ws2=XLSX.utils.aoa_to_sheet(sheetEstructuraEconomica());
+ ws1['!cols']=[{wch:45},{wch:16},{wch:10},{wch:16},{wch:10},{wch:16},{wch:10}]; ws2['!cols']=[{wch:45},{wch:16},{wch:10},{wch:12},{wch:16},{wch:10},{wch:16},{wch:10}];
+ const moneyFmt='#,##0.00', pctFmt='0.00%';
+ ['B','D','F'].forEach(col=>{for(let r=10;r<=61;r++){let cell=ws1[col+r]; if(cell) cell.z=moneyFmt}}); ['C','E','G'].forEach(col=>{for(let r=10;r<=59;r++){let cell=ws1[col+r]; if(cell) cell.z=pctFmt}});
+ ['B','E','G'].forEach(col=>{for(let r=10;r<=34;r++){let cell=ws2[col+r]; if(cell) cell.z=moneyFmt}}); ['C','F','H'].forEach(col=>{for(let r=10;r<=34;r++){let cell=ws2[col+r]; if(cell) cell.z=pctFmt}}); ['D'].forEach(col=>{for(let r=10;r<=34;r++){let cell=ws2[col+r]; if(cell) cell.z=pctFmt}});
+ XLSX.utils.book_append_sheet(wb,ws1,'ESTRUCTURA FINANCIERA'); XLSX.utils.book_append_sheet(wb,ws2,'ESTRUCTURA ECONOMICA');
+ const resp=[['Empresa',v('empresa')],['Contacto',v('contacto')],['Moneda',v('moneda')],['Ciclo',v('ciclo')],['Año reciente',v('y1')],['Año anterior',v('y2')],['Hace dos años',v('y3')],[],['Campo','Descripción','Plantilla','Año reciente','Año anterior','Hace dos años']];
+ balance.filter(x=>x[0]!=='section').forEach(x=>resp.push([x[0],x[1],x[2],n(`b_${x[0]}_1`),n(`b_${x[0]}_2`),n(`b_${x[0]}_3`)])); income.forEach(x=>resp.push([x[0],x[1],x[2],n(`i_${x[0]}_1`),n(`i_${x[0]}_2`),n(`i_${x[0]}_3`)]));
+ let ws3=XLSX.utils.aoa_to_sheet(resp); ws3['!cols']=[{wch:22},{wch:55},{wch:45},{wch:16},{wch:16},{wch:16}]; XLSX.utils.book_append_sheet(wb,ws3,'RESPUESTAS_CLIENTE');
+ const nombre=(v('empresa')||'cliente').replace(/[^a-z0-9áéíóúñ_-]+/gi,'_'); XLSX.writeFile(wb,`datos_financieros_${nombre}.xlsx`);
+}
+function guardar(){localStorage.setItem('formFinanciero',JSON.stringify([...document.querySelectorAll('input,select,textarea')].map(e=>[e.id,e.value])));alert('Datos guardados en este navegador.');}
+function cargar(){let d=JSON.parse(localStorage.getItem('formFinanciero')||'[]');d.forEach(([id,val])=>{let e=document.getElementById(id);if(e)e.value=val});actualizarKPIs();}
+function limpiar(){if(confirm('¿Seguro que desea limpiar todos los datos?')){document.getElementById('form').reset();document.querySelectorAll('.money').forEach(e=>e.value='');actualizarKPIs();}}
+buildRows();
+</script>
+</body>
+</html>
