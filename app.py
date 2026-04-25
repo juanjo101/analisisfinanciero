@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import datetime
 import io
 import base64
@@ -12,14 +13,27 @@ import matplotlib.pyplot as plt
 from core_engine import FinancialEngine
 
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_EXCEL = os.path.join(BASE_DIR, "PlantillaBC_2Grupo No. 1.xlsx")
+# Configuración de rutas para portabilidad
+if getattr(sys, 'frozen', False):
+    # Si se ejecuta como paquete (PyInstaller)
+    BASE_DIR = os.path.dirname(sys.executable)
+    RESOURCE_DIR = sys._MEIPASS
+else:
+    # Si se ejecuta como script normal
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    RESOURCE_DIR = BASE_DIR
+
+DEFAULT_EXCEL = os.path.join(RESOURCE_DIR, "PlantillaBC_2Grupo No. 1.xlsx")
 OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+app = Flask(
+    __name__, 
+    template_folder=os.path.join(RESOURCE_DIR, "templates"), 
+    static_folder=os.path.join(RESOURCE_DIR, "static")
+)
 engine = None
 
 
