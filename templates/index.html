@@ -14,6 +14,9 @@
         <input id="excelPath" type="text" />
         <input id="excelFile" type="file" accept=".xlsx,.xls" class="short-file" />
         <button id="uploadBtn">Subir Excel</button>
+        <a href="{{ url_for('static', filename='plantilla_financiera.xlsx') }}" download class="btn-download">
+          <button type="button">Descargar Plantilla</button>
+        </a>
         <button id="discoverBtn">Detectar hojas</button>
         <select id="balanceSheet"></select>
         <select id="erSheet"></select>

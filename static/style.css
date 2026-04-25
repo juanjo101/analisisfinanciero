@@ -70,6 +70,18 @@ button:hover {
   background: #1e40af;
 }
 
+.btn-download {
+  text-decoration: none;
+}
+
+.btn-download button {
+  background: #059669; /* Verde para diferenciar la descarga */
+}
+
+.btn-download button:hover {
+  background: #047857;
+}
+
 .grid {
   padding: 16px;
   display: grid;
