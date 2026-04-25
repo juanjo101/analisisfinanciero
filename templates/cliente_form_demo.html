@@ -20,12 +20,12 @@ main{max-width:1180px;margin:22px auto;padding:0 16px 40px}.card{background:whit
 <main>
 <form id="form">
 <section class="card"><h2>1. Datos generales</h2><div class="body grid">
-<div class="field"><label>Nombre del negocio o empresa</label><input id="empresa" value="Empresa de Prueba (Demo)" required placeholder="Ej.: Comercial Pérez SRL"></div>
+<div class="field"><label>Nombre del negocio o empresa</label><input id="empresa" required placeholder="Ej.: Comercial Pérez SRL"></div>
 <div class="field"><label>Persona que llena el formulario</label><input id="contacto" placeholder="Nombre y apellido"></div>
 <div class="field"><label>Moneda</label><select id="moneda"><option>DOP</option><option>USD</option></select></div>
-<div class="field"><label>Año más reciente</label><input P24"></div>
-<div class="field"><label>Año anterior</label><input P23"></div>
-<div class="field"><label>Hace dos años</label><input P22"></div>
+<div class="field"><label>Año más reciente</label><input id="y1" type="number" value="2025"></div>
+<div class="field"><label>Año anterior</label><input id="y2" type="number" value="2024"></div>
+<div class="field"><label>Hace dos años</label><input id="y3" type="number" value="2023"></div>
 </div></section>
 <section class="card"><h2>2. Balance general explicado en lenguaje simple</h2><div class="body">
 <p class="hint">Indique cuánto tenía el negocio al cierre de cada año. Si no aplica o no conoce el dato, puede dejarlo en cero.</p>
@@ -182,6 +182,28 @@ function guardar(){localStorage.setItem('formFinanciero',JSON.stringify([...docu
 function cargar(){let d=JSON.parse(localStorage.getItem('formFinanciero')||'[]');d.forEach(([id,val])=>{let e=document.getElementById(id);if(e)e.value=val});actualizarKPIs();}
 function limpiar(){if(confirm('¿Seguro que desea limpiar todos los datos?')){document.getElementById('form').reset();document.querySelectorAll('.money').forEach(e=>e.value='');actualizarKPIs();}}
 buildRows();
+// Bloque demo: auto-llenado
+if(document.getElementById("empresa")) { document.getElementById("empresa").value = "Empresa de Prueba (Demo)"; }
+if(document.getElementById("y1")) { document.getElementById("y1").value = "2024"; }
+if(document.getElementById("y2")) { document.getElementById("y2").value = "2023"; }
+if(document.getElementById("y3")) { document.getElementById("y3").value = "2022"; }
+if(document.getElementById("b_cash_1")) { document.getElementById("b_cash_1").value = "15121187075"; }
+if(document.getElementById("b_cash_2")) { document.getElementById("b_cash_2").value = "12350077221"; }
+if(document.getElementById("b_cash_3")) { document.getElementById("b_cash_3").value = "14608256735"; }
+if(document.getElementById("b_ar_1")) { document.getElementById("b_ar_1").value = "38968370735"; }
+if(document.getElementById("b_ar_2")) { document.getElementById("b_ar_2").value = "30829664914"; }
+if(document.getElementById("b_ar_3")) { document.getElementById("b_ar_3").value = "26753444573"; }
+if(document.getElementById("b_capital_1")) { document.getElementById("b_capital_1").value = "4698901584"; }
+if(document.getElementById("b_capital_2")) { document.getElementById("b_capital_2").value = "4086701767"; }
+if(document.getElementById("b_capital_3")) { document.getElementById("b_capital_3").value = "2898368355"; }
+if(document.getElementById("i_revenue_1")) { document.getElementById("i_revenue_1").value = "7296960590"; }
+if(document.getElementById("i_revenue_2")) { document.getElementById("i_revenue_2").value = "6055909264"; }
+if(document.getElementById("i_revenue_3")) { document.getElementById("i_revenue_3").value = "4357637360"; }
+if(document.getElementById("i_taxes_1")) { document.getElementById("i_taxes_1").value = "623074145"; }
+if(document.getElementById("i_taxes_2")) { document.getElementById("i_taxes_2").value = "638333412"; }
+if(document.getElementById("i_taxes_3")) { document.getElementById("i_taxes_3").value = "524467786"; }
+actualizarKPIs();
+
 </script>
 </body>
 </html>
