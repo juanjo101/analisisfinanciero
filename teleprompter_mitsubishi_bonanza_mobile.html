@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#050505">
+<title>Teleprompter | Mitsubishi Pickup Experience 4.0</title>
+<style>
+:root{--bg:#050505;--panel:#111;--text:#f5f5f5;--muted:#aaa;--red:#e30613;--line:#e30613;--gold:#c9a45c;--font:42px;--speed:0.55px}
+*{box-sizing:border-box} html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;overflow:hidden}
+body.mirror #scroll{transform:scaleX(-1)}
+.topbar{position:fixed;z-index:20;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 8px) 10px 8px;background:linear-gradient(180deg,rgba(0,0,0,.95),rgba(0,0,0,.72));border-bottom:1px solid rgba(255,255,255,.08);backdrop-filter:blur(12px)}
+.title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.brand{font-weight:800;font-size:14px;letter-spacing:.08em;text-transform:uppercase}.speaker{font-size:13px;color:var(--gold);font-weight:700;white-space:nowrap}.controls{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.btn{appearance:none;border:1px solid rgba(255,255,255,.16);background:#1b1b1b;color:white;border-radius:12px;padding:11px 8px;font-size:15px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.25)}.btn.primary{background:var(--red);border-color:var(--red)}.btn:active{transform:scale(.97)}
+.sliders{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}.sliderBox{background:#111;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px}.sliderBox label{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px}input[type=range]{width:100%;accent-color:var(--red)}
+.status{display:flex;align-items:center;gap:8px;margin-top:8px}.progressWrap{height:6px;background:#222;border-radius:99px;overflow:hidden;flex:1}.progress{height:100%;width:0%;background:linear-gradient(90deg,var(--red),var(--gold))}.time{font-variant-numeric:tabular-nums;font-size:12px;color:#ddd;min-width:92px;text-align:right}
+.guide{position:fixed;z-index:10;left:0;right:0;top:50%;height:2px;background:var(--line);box-shadow:0 0 18px var(--line);opacity:.82}.guide:before{content:"LECTURA";position:absolute;left:12px;top:-22px;color:var(--line);font-size:11px;font-weight:800;letter-spacing:.1em}.fadeTop,.fadeBottom{position:fixed;left:0;right:0;height:22vh;z-index:8;pointer-events:none}.fadeTop{top:0;background:linear-gradient(180deg,#050505 20%,rgba(5,5,5,0))}.fadeBottom{bottom:0;background:linear-gradient(0deg,#050505 20%,rgba(5,5,5,0))}
+.viewport{position:absolute;inset:0;overflow:hidden;padding-top:170px;padding-bottom:35vh}.scroll{max-width:950px;margin:0 auto;padding:25vh 22px 70vh;line-height:1.55;font-size:var(--font);font-weight:650;letter-spacing:.01em}.cue{display:inline-block;color:var(--gold);font-size:.52em;text-transform:uppercase;letter-spacing:.12em;margin:28px 0 4px}.slide{display:block;color:var(--red);font-size:.55em;text-transform:uppercase;letter-spacing:.09em;margin:24px 0 0;font-weight:900}.sectionCard{margin:38px 0;padding:28px 22px;border:1px solid rgba(227,6,19,.55);border-radius:20px;background:linear-gradient(135deg,rgba(227,6,19,.18),rgba(255,255,255,.04));text-align:center}.sectionCard b{display:block;color:white;font-size:1.05em}.sectionCard small{color:var(--gold);font-size:.48em;text-transform:uppercase;letter-spacing:.12em}.muted{color:#cfcfcf}.kbd{position:fixed;right:10px;bottom:calc(env(safe-area-inset-bottom) + 10px);z-index:30;color:#777;font-size:11px;background:rgba(0,0,0,.55);padding:7px 9px;border-radius:10px;border:1px solid rgba(255,255,255,.08)}
+@media (max-width:520px){:root{--font:34px}.controls{grid-template-columns:repeat(4,1fr)}.btn{font-size:13px;padding:10px 6px}.sliders{grid-template-columns:1fr}.viewport{padding-top:218px}.scroll{padding-left:16px;padding-right:16px}.brand{font-size:12px}.speaker{font-size:12px}.kbd{display:none}}
+@media (orientation:landscape) and (max-height:520px){:root{--font:30px}.topbar{padding-top:6px}.sliders{display:none}.viewport{padding-top:92px}.controls{grid-template-columns:repeat(8,1fr)}.scroll{max-width:1100px;padding-top:18vh}.title{margin-bottom:5px}.status{margin-top:5px}}
+@media print{.topbar,.guide,.fadeTop,.fadeBottom,.kbd{display:none}body{overflow:auto;color:#000;background:#fff}.viewport{position:static;overflow:visible;padding:0}.scroll{font-size:18pt;color:#000;padding:0;transform:none!important}.slide,.cue,.sectionCard small{color:#000}.sectionCard{border:1px solid #000;background:#fff}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="title"><div class="brand">Teleprompter · Mitsubishi Pickup Experience 4.0</div><div class="speaker" id="speaker">Juan José</div></div>
+  <div class="controls">
+    <button class="btn primary" id="play">▶ Reproducir</button><button class="btn" id="pause">⏸ Pausar</button><button class="btn" id="reset">⏹ Reiniciar</button><button class="btn" id="back">⏪</button><button class="btn" id="forward">⏩</button><button class="btn" id="mirror">🪞 Espejo</button><button class="btn" id="fs">⛶ Full</button><button class="btn" id="print">🖨 Guion</button>
+  </div>
+  <div class="sliders">
+    <div class="sliderBox"><label><span>Velocidad</span><span id="speedVal">0.55</span></label><input id="speed" type="range" min="0.15" max="1.8" step="0.05" value="0.55"></div>
+    <div class="sliderBox"><label><span>Tamaño texto</span><span id="fontVal">42 px</span></label><input id="font" type="range" min="24" max="76" step="1" value="42"></div>
+  </div>
+  <div class="status"><div class="progressWrap"><div class="progress" id="progress"></div></div><div class="time" id="time">00:00 / 11:30</div></div>
+</div>
+<div class="fadeTop"></div><div class="fadeBottom"></div><div class="guide"></div>
+<div class="viewport" id="viewport"><main class="scroll" id="scroll">
+
+<div class="sectionCard" data-speaker="Juan José"><small>Inicio · Diapositiva 1</small><b>Juan José Díaz</b></div>
+<span class="slide">➡ Diapositiva 1 · Portada</span>
+<span class="cue">Juan José · 45 segundos</span>
+Buenas noches, profesor y compañeros. Somos Laura García, Persio Martínez y Juan José Díaz. Hoy presentamos nuestra propuesta de consultoría titulada: Transformación de la Experiencia del Cliente en Bonanza Dominicana, una estrategia de Marketing 4.0 basada en inteligencia artificial, Web Semántica y analítica predictiva para Mitsubishi en el segmento de camionetas.
+<br><br>
+Nuestro enfoque no se limita a vender más vehículos. La propuesta busca rediseñar la relación entre Bonanza Dominicana y sus clientes, pasando de una comunicación tradicional a una experiencia inteligente, personalizada, medible y ética.
+<br><br>
+<span class="slide">➡ Cambiar a Diapositiva 2 · El cambio del comprador</span>
+El punto de partida es un cambio profundo en el consumidor. Hoy la decisión de comprar una camioneta no inicia necesariamente en el concesionario. Inicia en Google, continúa en YouTube, se valida en redes sociales, se conversa por WhatsApp y finalmente se confirma con una prueba de manejo.
+<br><br>
+Esto significa que Bonanza Dominicana ya no compite únicamente por precio, potencia o disponibilidad. Compite por la capacidad de entender al cliente antes de que llegue al showroom. Ese es precisamente el espacio donde el Marketing 4.0 y la inteligencia artificial generan valor.
+<br><br>
+<span class="slide">➡ Cambiar a Diapositiva 3 · Diagnóstico</span>
+Desde nuestra lectura como consultores, identificamos cinco desafíos estratégicos. Primero, la integración de canales físicos y digitales. Segundo, convertir el CRM en una fuente real de inteligencia comercial. Tercero, responder más rápido a los prospectos. Cuarto, personalizar sin invadir la privacidad. Y quinto, medir resultados de negocio, no solamente métricas de visibilidad.
+<br><br>
+Estos desafíos justifican una estrategia integral que conecte marketing, ventas, postventa, datos e inteligencia artificial.
+
+<div class="sectionCard" data-speaker="Laura García"><small>Parte I · Filosofía, propósito y ética</small><b>Laura García</b></div>
+<span class="slide">➡ Diapositiva 4 · Evolución Marketing 1.0 a 5.0</span>
+<span class="cue">Laura · 2 minutos</span>
+Gracias, Juan. Desde la filosofía de marca, analizamos la evolución de Bonanza Dominicana y Mitsubishi a través de las etapas del marketing. En el Marketing 1.0, el foco estaba en el producto: motor, carga, tracción, resistencia y durabilidad. En el Marketing 2.0, el centro pasó al cliente: empresarios, familias, contratistas, agroproductores y profesionales urbanos.
+<br><br>
+En el Marketing 3.0, la marca conecta con valores humanos. En este caso, el propósito no es simplemente vender camionetas, sino impulsar movilidad productiva, seguridad vial, sostenibilidad operativa y desarrollo económico para familias y empresas dominicanas.
+<br><br>
+Con Marketing 4.0, el desafío es integrar la experiencia física y digital. Y con Marketing 5.0, la inteligencia artificial permite que la tecnología se utilice para mejorar la experiencia humana, no para reemplazarla ni manipularla.
+<br><br>
+<span class="slide">➡ Cambiar a Diapositiva 5 · Propósito humano</span>
+El propósito humano que proponemos es claro: impulsar el progreso de familias, emprendedores y sectores productivos dominicanos mediante soluciones de movilidad robustas, seguras y sostenibles.
+<br><br>
+Esto conecta con el Marketing 3.0 porque el vehículo deja de verse solamente como un activo comercial y se entiende como una herramienta de progreso. Para un empresario, puede significar continuidad operativa. Para una familia, seguridad. Para un productor, capacidad de trabajo. Y para Bonanza, una relación más profunda con el cliente.
+
+<div class="sectionCard" data-speaker="Persio Martínez"><small>Parte II · IA, segmentación y Web Semántica</small><b>Persio Martínez</b></div>
+<span class="slide">➡ Diapositiva 6 · Segmentación conductual</span>
+<span class="cue">Persio · 2 minutos</span>
+Gracias, Laura. La segunda parte de la propuesta se basa en inteligencia de mercado y Web Semántica. En lugar de segmentar solamente por edad, ingreso o ubicación, proponemos una segmentación conductual.
+<br><br>
+Identificamos cuatro perfiles: empresarios productivos, agroproductores y contratistas, familias activas y profesionales urbanos. Cada segmento se define por comportamiento observable: qué busca, qué canal usa, qué contenido consume, qué pregunta y en qué momento del viaje de compra se encuentra.
+<br><br>
+<span class="slide">➡ Cambiar a Diapositiva 7 · Web Semántica</span>
+La Web Semántica permite conectar significados. Por ejemplo, si un usuario busca camioneta para finca, ve videos sobre rutas de montaña y pregunta por financiamiento, la IA no interpreta datos aislados. Conecta movilidad productiva, territorio dominicano, sostenibilidad operativa y tecnología automotriz.
+<br><br>
+Con ese contexto, el sistema puede recomendar contenido sobre tracción, suspensión, mantenimiento y disponibilidad de repuestos. Para una familia activa, la IA priorizaría seguridad, confort y doble cabina. Para una empresa, priorizaría costo total de propiedad, flotillas y postventa.
+<br><br>
+<span class="slide">➡ Cambiar a Diapositiva 8 · Buyer Persona</span>
+Nuestro buyer persona es Roberto Méndez, un empresario de 42 años que necesita una camioneta para trabajo, visitas a clientes y viajes interprovinciales. Roberto usa WhatsApp, compara en YouTube y busca reducir costos de mantenimiento sin afectar su flujo de caja.
+<br><br>
+La IA predice que Roberto tiene alta probabilidad de solicitar cotización si recibe contenido sobre costo total de propiedad, financiamiento y respaldo postventa. Este perfil permite pasar de un mensaje genérico a una comunicación realmente contextual.
+
+<div class="sectionCard" data-speaker="Juan José"><small>Parte III · CRM, automatización y campaña</small><b>Juan José Díaz</b></div>
+<span class="slide">➡ Diapositiva 9 · CRM inteligente</span>
+<span class="cue">Juan José · 2 minutos</span>
+La tercera parte es la ejecución. Proponemos que el CRM sea el núcleo operativo de Mitsubishi Pickup Experience 4.0. No debe funcionar solo como una agenda de contactos, sino como un sistema vivo que registra interacciones, interpreta intención y activa acciones personalizadas.
+<br><br>
+Si el cliente visita la página de la L200/Triton, el CRM registra modelo, fuente y tiempo de navegación. Si descarga un catálogo, lo clasifica en consideración. Si pregunta por financiamiento vía WhatsApp, la IA lo identifica como alta intención. Si agenda una prueba de manejo, se activa recordatorio, llamada del asesor y preparación de oferta.
+<br><br>
+Así, la IA no reemplaza al asesor. Le entrega contexto para intervenir mejor, más rápido y con un mensaje más relevante.
+<br><br>
+<span class="slide">➡ Cambiar a Diapositiva 10 · Campaña</span>
+La campaña se denomina Mitsubishi Pickup Experience 4.0. Su mensaje central es: la camioneta que entiende tu camino, tu trabajo y tu próxima meta.
+<br><br>
+Utilizamos IA generativa para crear anuncios, copys, guiones y variaciones visuales. La campaña incluye tres mensajes por etapa del viaje del cliente: descubrimiento, consideración y conversión. En descubrimiento, se comunica inspiración. En consideración, se ofrece información técnica y financiera. En conversión, se impulsa la prueba de manejo y la asesoría personalizada.
+
+<div class="sectionCard" data-speaker="Persio Martínez"><small>Parte IV · Analítica, KPIs y optimización</small><b>Persio Martínez</b></div>
+<span class="slide">➡ Diapositiva 11 · KPIs y modelos predictivos</span>
+<span class="cue">Persio · 1 minuto 30 segundos</span>
+Para medir la estrategia seleccionamos tres KPIs principales: tasa de conversión de leads a prueba de manejo, Customer Lifetime Value y sentimiento de marca.
+<br><br>
+Los modelos predictivos permiten mejorar estos indicadores. Los modelos de propensión identifican usuarios con mayor probabilidad de compra. El lead scoring prioriza prospectos. Los motores de recomendación sugieren versión, accesorios, financiamiento o mantenimiento. Y el análisis de sentimiento permite detectar percepción positiva o riesgos reputacionales.
+<br><br>
+<span class="slide">➡ Cambiar a Diapositiva 12 · Dashboard y ROI</span>
+El dashboard ejecutivo integra marketing, ventas y postventa. Permite ver leads generados, leads calificados, pruebas de manejo, conversión, ROI, sentimiento de marca y alertas estratégicas. La idea es que la dirección de Bonanza no solo vea datos, sino decisiones accionables.
+<br><br>
+También propusimos pruebas A/B para optimizar llamados a la acción, formatos de contenido y asuntos de correo. Esto permite que la campaña aprenda y mejore continuamente.
+
+<div class="sectionCard" data-speaker="Laura García"><small>Gobernanza ética</small><b>Laura García</b></div>
+<span class="slide">➡ Diapositiva 13 · Ética, trazabilidad y consentimiento</span>
+<span class="cue">Laura · 1 minuto 30 segundos</span>
+Un punto crítico es la ética. La personalización sin límites puede convertirse en invasión. Por eso proponemos un modelo de gobernanza basado en transparencia, consentimiento informado, minimización de datos, seguridad, supervisión humana y derecho del usuario a retirar su consentimiento.
+<br><br>
+Cada dato debe tener trazabilidad: origen, finalidad autorizada, canal de captura, tiempo de conservación y registro de acceso. No es lo mismo autorizar una cotización, aceptar cookies, recibir comunicaciones comerciales o permitir recomendaciones personalizadas. Cada finalidad debe gestionarse de forma diferenciada.
+<br><br>
+En datos sensibles como geolocalización o información de vehículos conectados, el uso debe ser especialmente restrictivo y nunca utilizarse para publicidad sin autorización explícita.
+
+<div class="sectionCard" data-speaker="Juan José"><small>Cierre ejecutivo</small><b>Juan José Díaz</b></div>
+<span class="slide">➡ Diapositiva 14 · Conclusión</span>
+<span class="cue">Juan José · 1 minuto</span>
+Para cerrar, nuestra propuesta demuestra que el Marketing 4.0 no consiste en publicar más anuncios digitales. Consiste en rediseñar la forma en que Bonanza Dominicana comprende, acompaña y crea valor para sus clientes.
+<br><br>
+Mitsubishi Pickup Experience 4.0 integra propósito humano, segmentación conductual, Web Semántica, CRM inteligente, IA generativa, modelos predictivos y gobernanza ética.
+<br><br>
+La conclusión principal es esta: la transformación digital no consiste únicamente en vender más camionetas. Consiste en construir relaciones inteligentes, éticas y sostenibles entre Bonanza Dominicana y sus clientes mediante el uso responsable de la inteligencia artificial.
+<br><br>
+Muchas gracias.
+
+</main></div>
+<div class="kbd">Espacio: play/pausa · ↑↓ velocidad · ←→ mover</div>
+<script>
+const scroll=document.getElementById('scroll'), viewport=document.getElementById('viewport');
+let playing=false, speed=parseFloat(document.getElementById('speed').value), last=null, raf=null, startTime=0, elapsed=0;
+const totalSec=690;
+function fmt(s){s=Math.max(0,Math.floor(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+function update(){const max=scroll.scrollHeight-viewport.clientHeight; const y=viewport.scrollTop; const pct=max>0?(y/max)*100:0; document.getElementById('progress').style.width=Math.min(100,pct)+'%'; const e=(pct/100)*totalSec; document.getElementById('time').textContent=fmt(e)+' / '+fmt(totalSec); updateSpeaker();}
+function tick(ts){if(!playing)return; if(last==null)last=ts; const dt=ts-last; last=ts; viewport.scrollTop += speed*dt/16.67; update(); if(viewport.scrollTop >= scroll.scrollHeight-viewport.clientHeight-10){playing=false;document.getElementById('play').textContent='▶ Reproducir';return} raf=requestAnimationFrame(tick)}
+function play(){if(playing)return; playing=true; last=null; document.getElementById('play').textContent='▶ Reproduciendo'; raf=requestAnimationFrame(tick)}
+function pause(){playing=false; document.getElementById('play').textContent='▶ Reproducir'; if(raf)cancelAnimationFrame(raf)}
+function reset(){pause(); viewport.scrollTop=0; update()}
+function updateSpeaker(){const cards=[...document.querySelectorAll('.sectionCard')]; let current='Juan José'; const center=viewport.scrollTop+viewport.clientHeight*.45; cards.forEach(c=>{if(c.offsetTop<center)current=c.dataset.speaker||current}); document.getElementById('speaker').textContent=current}
+document.getElementById('play').onclick=play; document.getElementById('pause').onclick=pause; document.getElementById('reset').onclick=reset;
+document.getElementById('back').onclick=()=>{viewport.scrollTop-=240;update()}; document.getElementById('forward').onclick=()=>{viewport.scrollTop+=240;update()};
+document.getElementById('mirror').onclick=()=>document.body.classList.toggle('mirror');
+document.getElementById('fs').onclick=()=>{if(!document.fullscreenElement){document.documentElement.requestFullscreen?.()}else{document.exitFullscreen?.()}};
+document.getElementById('print').onclick=()=>window.print();
+document.getElementById('speed').oninput=e=>{speed=parseFloat(e.target.value);document.getElementById('speedVal').textContent=speed.toFixed(2)};
+document.getElementById('font').oninput=e=>{document.documentElement.style.setProperty('--font',e.target.value+'px');document.getElementById('fontVal').textContent=e.target.value+' px';update()};
+document.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();playing?pause():play()} if(e.key==='ArrowDown'){speed=Math.max(.15,speed-.05);document.getElementById('speed').value=speed;document.getElementById('speedVal').textContent=speed.toFixed(2)} if(e.key==='ArrowUp'){speed=Math.min(1.8,speed+.05);document.getElementById('speed').value=speed;document.getElementById('speedVal').textContent=speed.toFixed(2)} if(e.key==='ArrowLeft'){viewport.scrollTop-=240;update()} if(e.key==='ArrowRight'){viewport.scrollTop+=240;update()}});
+let touchStart=null; viewport.addEventListener('touchstart',e=>{touchStart=e.touches[0].clientY},{passive:true}); viewport.addEventListener('touchend',e=>{if(touchStart==null)return; const dy=(e.changedTouches[0].clientY-touchStart); if(Math.abs(dy)<12){playing?pause():play()} touchStart=null},{passive:true});
+window.addEventListener('resize',update); update();
+</script>
+</body>
+</html>
